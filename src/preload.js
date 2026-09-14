@@ -15,11 +15,17 @@ if (process.isMainFrame && window.location.hostname.includes('youtube.com')) {
         webFrame.insertCSS(cssContent);
 
         // Inject ReVanced engine into page context
-        window.addEventListener('DOMContentLoaded', () => {
+        const runInjector = () => {
             webFrame.executeJavaScript(jsContent).catch((err) => {
                 console.error('[OmarchyTube] Fel vid körning av injector:', err);
             });
-        });
+        };
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', runInjector);
+        } else {
+            runInjector();
+        }
     } catch (err) {
         console.error('[OmarchyTube] Kunde inte ladda resursfiler i preload:', err);
     }

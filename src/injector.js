@@ -298,6 +298,30 @@
     window.addEventListener('popstate', checkUrlChange);
     setInterval(checkUrlChange, 1000);
 
+    // --- Module 4: 100% Window Fit (Responsive Full Canvas) ---
+    function enforce100PercentFit() {
+        const c = document.getElementById('container');
+        const bg = document.getElementById('app-background');
+        if (c) {
+            c.style.setProperty('width', '100vw', 'important');
+            c.style.setProperty('height', '100vh', 'important');
+            c.style.setProperty('margin', '0', 'important');
+            c.style.setProperty('left', '0', 'important');
+            c.style.setProperty('top', '0', 'important');
+        }
+        if (bg) {
+            bg.style.setProperty('width', '100vw', 'important');
+            bg.style.setProperty('height', '100vh', 'important');
+            bg.style.setProperty('margin', '0', 'important');
+            bg.style.setProperty('left', '0', 'important');
+            bg.style.setProperty('top', '0', 'important');
+        }
+    }
+
+    window.addEventListener('resize', enforce100PercentFit);
+    setInterval(enforce100PercentFit, 500);
+    enforce100PercentFit();
+
     // Initial check
     setTimeout(checkUrlChange, 500);
 })();

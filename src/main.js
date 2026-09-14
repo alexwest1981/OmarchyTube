@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, shell } = require('electron');
+const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -242,27 +242,19 @@ function createWindow() {
         if (((input.key === 'Escape' || input.key === 'Backspace') && input.type === 'keyDown') ||
             (input.alt && input.key === 'ArrowLeft' && input.type === 'keyDown')) {
             mainWindow.webContents.executeJavaScript(`
-                const isInput = document.activeElement && (
+                Boolean(document.activeElement && (
                     document.activeElement.tagName === 'INPUT' ||
                     document.activeElement.tagName === 'TEXTAREA' ||
                     document.activeElement.isContentEditable
-                );
-                if (!isInput || '${input.key}' === 'Escape') {
-                    if (typeof exitCurrentVideo === 'function') {
-                        exitCurrentVideo();
-                    } else {
-                        const v = document.querySelector('video');
-                        if (v) v.pause();
-                        if (window.location.href.includes('/tv')) {
-                            window.location.hash = '#/';
-                        } else if (window.history.length > 1) {
-                            window.history.back();
-                        } else {
-                            window.location.href = 'https://www.youtube.com';
-                        }
-                    }
+                ));
+            `).then(isInput => {
+                if (!isInput || input.key === 'Escape') {
+                    handleExitVideo();
                 }
-            `).catch(() => {});
+            }).catch(() => {
+                handleExitVideo();
+            });
+            event.preventDefault();
         }
 
         if (input.alt && input.key === 'ArrowRight' && input.type === 'keyDown') {
@@ -271,16 +263,52 @@ function createWindow() {
         }
     });
 
+    function handleExitVideo() {
+        if (!mainWindow) return;
+
+        console.log('[OmarchyTube] Main process handling exit video...');
+        mainWindow.webContents.executeJavaScript(`
+            try {
+                const p = document.querySelector('.html5-video-player');
+                if (p && typeof p.stopVideo === 'function') p.stopVideo();
+                const v = document.querySelector('video');
+                if (v) { v.pause(); v.currentTime = 0; }
+            } catch (e) {}
+        `).catch(() => {});
+
+        if (mainWindow.webContents.canGoBack()) {
+            mainWindow.webContents.goBack();
+        } else {
+            mainWindow.loadURL(getUrlForMode(currentMode));
+        }
+
+        // Fallback: If still on watch page after 350ms, navigate to root URL
+        setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.executeJavaScript(`
+                    (() => {
+                        const onWatch = !!document.querySelector('ytlr-watch-page, ytd-watch-flexy');
+                        const v = document.querySelector('video');
+                        const playing = !!v && !v.paused;
+                        return onWatch || playing;
+                    })()
+                `).then(isWatching => {
+                    if (isWatching) {
+                        mainWindow.loadURL(getUrlForMode(currentMode));
+                    }
+                }).catch(() => {});
+            }
+        }, 350);
+    }
+
+    ipcMain.on('omarchy-exit-video', () => {
+        handleExitVideo();
+    });
+
     // Handle mouse 4 (Back) button
     mainWindow.on('app-command', (e, cmd) => {
         if (cmd === 'browser-backward') {
-            mainWindow.webContents.executeJavaScript(`
-                if (typeof exitCurrentVideo === 'function') {
-                    exitCurrentVideo();
-                } else if (window.history.length > 1) {
-                    window.history.back();
-                }
-            `).catch(() => {});
+            handleExitVideo();
         }
     });
 

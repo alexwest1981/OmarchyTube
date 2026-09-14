@@ -1,32 +1,41 @@
-const { webFrame } = require('electron');
+const { webFrame, ipcRenderer, contextBridge } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-// Only run in top-level frame and strictly on YouTube
-if (process.isMainFrame && window.location.hostname.includes('youtube.com')) {
+// Expose bridge for quick exit and controls
+try {
+    contextBridge.exposeInMainWorld('omarchyBridge', {
+        exitVideo: () => ipcRenderer.send('omarchy-exit-video')
+    });
+} catch (err) {
+    console.error('[OmarchyTube] Preload bridge error:', err);
+}
+
+// Only run in top-level frame
+if (process.isMainFrame) {
     const stylesPath = path.join(__dirname, 'styles.css');
     const injectorPath = path.join(__dirname, 'injector.js');
 
     try {
-        const cssContent = fs.readFileSync(stylesPath, 'utf8');
-        const jsContent = fs.readFileSync(injectorPath, 'utf8');
+        if (fs.existsSync(stylesPath)) {
+            const cssContent = fs.readFileSync(stylesPath, 'utf8');
+            webFrame.insertCSS(cssContent);
+        }
+        if (fs.existsSync(injectorPath)) {
+            const jsContent = fs.readFileSync(injectorPath, 'utf8');
+            const runInjector = () => {
+                webFrame.executeJavaScript(jsContent).catch((err) => {
+                    console.error('[OmarchyTube] Fel vid körning av injector:', err);
+                });
+            };
 
-        // Inject custom styles
-        webFrame.insertCSS(cssContent);
-
-        // Inject ReVanced engine into page context
-        const runInjector = () => {
-            webFrame.executeJavaScript(jsContent).catch((err) => {
-                console.error('[OmarchyTube] Fel vid körning av injector:', err);
-            });
-        };
-
-        if (document.readyState === 'loading') {
-            window.addEventListener('DOMContentLoaded', runInjector);
-        } else {
-            runInjector();
+            if (document.readyState === 'loading') {
+                window.addEventListener('DOMContentLoaded', runInjector);
+            } else {
+                runInjector();
+            }
         }
     } catch (err) {
-        console.error('[OmarchyTube] Kunde inte ladda resursfiler i preload:', err);
+        console.error('[OmarchyTube] Preload read error:', err);
     }
 }

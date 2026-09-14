@@ -343,38 +343,28 @@
     }
 
     function exitCurrentVideo() {
-        console.log('[OmarchyTube] Avslutar video och återgår till feeden...');
-        const video = document.querySelector('video');
-        if (video) {
-            video.pause();
-            video.currentTime = 0;
+        console.log('[OmarchyTube] Exiting current video and returning to feed...');
+        try {
+            const p = document.querySelector('.html5-video-player');
+            if (p && typeof p.stopVideo === 'function') p.stopVideo();
+            const v = document.querySelector('video');
+            if (v) { v.pause(); v.currentTime = 0; }
+        } catch (e) {}
+
+        // 1. Call Electron main process bridge if available
+        if (window.omarchyBridge && typeof window.omarchyBridge.exitVideo === 'function') {
+            window.omarchyBridge.exitVideo();
+            return;
         }
 
+        // 2. Direct browser navigation fallback
         if (window.location.href.includes('/tv')) {
-            // Send synthetic TV remote Escape / Back events to page
-            const escEvent = new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, code: 'Escape', which: 27, bubbles: true, cancelable: true });
-            window.dispatchEvent(escEvent);
-            document.dispatchEvent(escEvent);
-
-            const backEvent = new KeyboardEvent('keydown', { key: 'Backspace', keyCode: 8, code: 'Backspace', which: 8, bubbles: true, cancelable: true });
-            window.dispatchEvent(backEvent);
-            document.dispatchEvent(backEvent);
-
-            const webosBack = new KeyboardEvent('keydown', { key: 'Back', keyCode: 461, which: 461, bubbles: true, cancelable: true });
-            window.dispatchEvent(webosBack);
-            document.dispatchEvent(webosBack);
-
-            // Attempt to click Home in sidebar guide if present
-            const homeEntry = Array.from(document.querySelectorAll('ytlr-guide-entry-renderer, ytlr-button')).find(
-                el => el.getAttribute('aria-label') === 'Home' || el.innerText?.trim() === 'Home'
-            );
-            if (homeEntry) {
-                homeEntry.click();
+            if (window.history.length > 1) {
+                window.history.back();
             } else {
-                window.location.hash = '#/';
+                window.location.href = 'https://www.youtube.com/tv';
             }
         } else {
-            // In Desktop mode
             if (window.history.length > 1) {
                 window.history.back();
             } else {
@@ -387,6 +377,7 @@
     window.exitCurrentVideo = exitCurrentVideo;
 
     let backButtonTimeout = null;
+
     function ensureBackButton() {
         let btn = document.getElementById('omarchy-back-button');
         if (!btn) {
@@ -413,27 +404,43 @@
                 e.stopPropagation();
                 exitCurrentVideo();
             };
+            btn.onpointerdown = (e) => {
+                e.stopPropagation();
+            };
             document.body.appendChild(btn);
         }
+        return btn;
+    }
 
-        const isWatching = isWatchingVideo();
+    function onMouseMove() {
+        const btn = ensureBackButton();
+        if (!btn) return;
 
-        if (isWatching) {
+        if (isWatchingVideo()) {
             btn.classList.add('visible');
             clearTimeout(backButtonTimeout);
             backButtonTimeout = setTimeout(() => {
                 const v = document.querySelector('video');
+                // Hide after 3s of mouse inactivity unless video is paused
                 if (v && !v.paused) {
                     btn.classList.remove('visible');
                 }
-            }, 3500);
+            }, 3000);
         } else {
             btn.classList.remove('visible');
         }
     }
 
-    document.addEventListener('mousemove', ensureBackButton);
-    setInterval(ensureBackButton, 800);
+    document.addEventListener('mousemove', onMouseMove, { passive: true });
+
+    // Periodic check ONLY maintains DOM presence and cleans up if video ended
+    setInterval(() => {
+        ensureBackButton();
+        if (!isWatchingVideo()) {
+            const btn = document.getElementById('omarchy-back-button');
+            if (btn) btn.classList.remove('visible');
+        }
+    }, 1000);
 
     // In-page keyboard handler for Escape, Backspace, and 'q'
     window.addEventListener('keydown', (e) => {

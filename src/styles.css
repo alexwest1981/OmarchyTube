@@ -188,3 +188,49 @@ html, body {
     top: 0 !important;
     position: absolute !important;
 }
+
+/* --- Level 8: Floating Quick-Back Button --- */
+#omarchy-back-button {
+    position: fixed;
+    top: 24px;
+    left: 24px;
+    width: 44px;
+    height: 44px;
+    background: rgba(18, 18, 22, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 50%;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2147483646;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.2s ease, background 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+#omarchy-back-button svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+    transition: transform 0.2s ease;
+}
+
+#omarchy-back-button:hover {
+    background: rgba(35, 35, 42, 0.95);
+    border-color: #00d482;
+    transform: scale(1.08);
+}
+
+#omarchy-back-button:hover svg {
+    transform: translateX(-2px);
+}
+
+#omarchy-back-button.visible {
+    opacity: 1;
+    pointer-events: auto;
+}

@@ -322,6 +322,81 @@
     setInterval(enforce100PercentFit, 500);
     enforce100PercentFit();
 
+    // --- Module 5: Quick-Back Button & Video Exit ---
+    function exitCurrentVideo() {
+        const video = document.querySelector('video');
+        if (video) video.pause();
+
+        if (window.location.href.includes('/tv')) {
+            window.location.hash = '#/';
+            const esc = new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, code: 'Escape', bubbles: true });
+            document.dispatchEvent(esc);
+        } else {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = 'https://www.youtube.com';
+            }
+        }
+    }
+
+    let backButtonTimeout = null;
+    function ensureBackButton() {
+        let btn = document.getElementById('omarchy-back-button');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = 'omarchy-back-button';
+            btn.title = 'Backa ur video (Escape / Backspace)';
+            btn.innerHTML = `
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                </svg>
+            `;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                exitCurrentVideo();
+            };
+            document.body.appendChild(btn);
+        }
+
+        const isWatching = !!document.querySelector('video') && (window.location.href.includes('watch') || !!currentVideoId);
+
+        if (isWatching) {
+            btn.classList.add('visible');
+            clearTimeout(backButtonTimeout);
+            backButtonTimeout = setTimeout(() => {
+                const v = document.querySelector('video');
+                if (v && !v.paused) {
+                    btn.classList.remove('visible');
+                }
+            }, 3000);
+        } else {
+            btn.classList.remove('visible');
+        }
+    }
+
+    document.addEventListener('mousemove', ensureBackButton);
+    setInterval(ensureBackButton, 1000);
+
+    // In-page keyboard handler for Escape, Backspace, and 'q'
+    window.addEventListener('keydown', (e) => {
+        const isInput = document.activeElement && (
+            document.activeElement.tagName === 'INPUT' ||
+            document.activeElement.tagName === 'TEXTAREA' ||
+            document.activeElement.isContentEditable
+        );
+
+        if (isInput && e.key !== 'Escape') return;
+
+        if (e.key === 'Escape' || e.key === 'Backspace' || (e.key.toLowerCase() === 'q' && !isInput)) {
+            const isWatching = !!document.querySelector('video') && (window.location.href.includes('watch') || !!currentVideoId);
+            if (isWatching) {
+                exitCurrentVideo();
+                e.preventDefault();
+            }
+        }
+    }, true);
+
     // Initial check
     setTimeout(checkUrlChange, 500);
 })();

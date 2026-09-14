@@ -215,20 +215,48 @@ function createWindow() {
             event.preventDefault();
         }
 
-        // Back / Forward navigation: Alt+Left / Alt+Right
-        if (input.alt && input.key === 'ArrowLeft' && input.type === 'keyDown') {
-            if (mainWindow.webContents.canGoBack()) mainWindow.webContents.goBack();
-            event.preventDefault();
+        // Exit video / Back navigation: Escape, Backspace, or Alt+Left
+        if (((input.key === 'Escape' || input.key === 'Backspace') && input.type === 'keyDown') ||
+            (input.alt && input.key === 'ArrowLeft' && input.type === 'keyDown')) {
+            mainWindow.webContents.executeJavaScript(`
+                const isInput = document.activeElement && (
+                    document.activeElement.tagName === 'INPUT' ||
+                    document.activeElement.tagName === 'TEXTAREA' ||
+                    document.activeElement.isContentEditable
+                );
+                if (!isInput || '${input.key}' === 'Escape') {
+                    if (typeof exitCurrentVideo === 'function') {
+                        exitCurrentVideo();
+                    } else {
+                        const v = document.querySelector('video');
+                        if (v) v.pause();
+                        if (window.location.href.includes('/tv')) {
+                            window.location.hash = '#/';
+                        } else if (window.history.length > 1) {
+                            window.history.back();
+                        } else {
+                            window.location.href = 'https://www.youtube.com';
+                        }
+                    }
+                }
+            `).catch(() => {});
         }
+
         if (input.alt && input.key === 'ArrowRight' && input.type === 'keyDown') {
             if (mainWindow.webContents.canGoForward()) mainWindow.webContents.goForward();
             event.preventDefault();
         }
+    });
 
-        // In TV mode, Escape goes back in the TV navigation
-        if (currentMode === 'tv' && input.key === 'Escape' && input.type === 'keyDown') {
+    // Handle mouse 4 (Back) button
+    mainWindow.on('app-command', (e, cmd) => {
+        if (cmd === 'browser-backward') {
             mainWindow.webContents.executeJavaScript(`
-                window.history.back();
+                if (typeof exitCurrentVideo === 'function') {
+                    exitCurrentVideo();
+                } else if (window.history.length > 1) {
+                    window.history.back();
+                }
             `).catch(() => {});
         }
     });

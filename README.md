@@ -44,12 +44,14 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 
 ## ⌨️ Tangentbordskontroller
 
-| Tangent | Funktion |
+| Tangent / Mus | Funktion |
 |---|---|
+| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | **Backa ur video till hemskärmen / feeden** |
+| Klick på `←`-knappen i hörnet | **Flytande tillbaka-knapp som visas vid musrörelse** |
+| Musknapp 4 (Bakåt) | Backa ur video / historik |
 | <kbd>F11</kbd> | Växla fönstrets helskärmsläge |
 | <kbd>F2</kbd> | **Växla direkt mellan TV-läge och Desktop-läge** |
 | <kbd>Pilar</kbd> + <kbd>Enter</kbd> | Navigera och välj i TV-läget |
-| <kbd>Escape</kbd> / <kbd>Backspace</kbd> | Gå bakåt i TV-läget |
 | <kbd>Mellanslag</kbd> / <kbd>k</kbd> | Spela / Pausa |
 | <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Ladda om sidan |
 | <kbd>Alt</kbd> + <kbd>Home</kbd> | Gå till startsidan |

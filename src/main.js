@@ -150,6 +150,29 @@ function createWindow() {
     }
 
     mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
+
+    const injectResources = () => {
+        const url = mainWindow.webContents.getURL();
+        if (url && url.includes('youtube.com')) {
+            try {
+                const stylesPath = path.join(__dirname, 'styles.css');
+                const injectorPath = path.join(__dirname, 'injector.js');
+                if (fs.existsSync(stylesPath)) {
+                    mainWindow.webContents.insertCSS(fs.readFileSync(stylesPath, 'utf8'));
+                }
+                if (fs.existsSync(injectorPath)) {
+                    mainWindow.webContents.executeJavaScript(fs.readFileSync(injectorPath, 'utf8')).catch((err) => {
+                        console.error('[OmarchyTube] JS inject error:', err);
+                    });
+                }
+            } catch (err) {
+                console.error('[OmarchyTube] Injection error from main process:', err);
+            }
+        }
+    };
+
+    mainWindow.webContents.on('dom-ready', injectResources);
+
     mainWindow.loadURL(getUrlForMode(currentMode));
 
     // Handle external links

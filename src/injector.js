@@ -4,6 +4,9 @@
  */
 
 (function () {
+    if (window.__omarchy_revanced_loaded) return;
+    window.__omarchy_revanced_loaded = true;
+
     console.log('[OmarchyTube] Injected ReVanced engine loaded.');
 
     let currentVideoId = null;
@@ -323,15 +326,55 @@
     enforce100PercentFit();
 
     // --- Module 5: Quick-Back Button & Video Exit ---
+    function isWatchingVideo() {
+        // TV mode watch page
+        if (document.querySelector('ytlr-watch-page')) return true;
+
+        // Desktop mode watch page
+        if (window.location.href.includes('/watch') || document.querySelector('ytd-watch-flexy')) return true;
+
+        // Active video playback with visible dimensions
+        const v = document.querySelector('video');
+        if (!v) return false;
+        const rect = v.getBoundingClientRect();
+        const hasSize = rect.width > 50 && rect.height > 50;
+        const isPlaying = !v.paused || v.currentTime > 0 || (v.duration && v.duration > 0);
+        return hasSize && isPlaying;
+    }
+
     function exitCurrentVideo() {
+        console.log('[OmarchyTube] Avslutar video och återgår till feeden...');
         const video = document.querySelector('video');
-        if (video) video.pause();
+        if (video) {
+            video.pause();
+            video.currentTime = 0;
+        }
 
         if (window.location.href.includes('/tv')) {
-            window.location.hash = '#/';
-            const esc = new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, code: 'Escape', bubbles: true });
-            document.dispatchEvent(esc);
+            // Send synthetic TV remote Escape / Back events to page
+            const escEvent = new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, code: 'Escape', which: 27, bubbles: true, cancelable: true });
+            window.dispatchEvent(escEvent);
+            document.dispatchEvent(escEvent);
+
+            const backEvent = new KeyboardEvent('keydown', { key: 'Backspace', keyCode: 8, code: 'Backspace', which: 8, bubbles: true, cancelable: true });
+            window.dispatchEvent(backEvent);
+            document.dispatchEvent(backEvent);
+
+            const webosBack = new KeyboardEvent('keydown', { key: 'Back', keyCode: 461, which: 461, bubbles: true, cancelable: true });
+            window.dispatchEvent(webosBack);
+            document.dispatchEvent(webosBack);
+
+            // Attempt to click Home in sidebar guide if present
+            const homeEntry = Array.from(document.querySelectorAll('ytlr-guide-entry-renderer, ytlr-button')).find(
+                el => el.getAttribute('aria-label') === 'Home' || el.innerText?.trim() === 'Home'
+            );
+            if (homeEntry) {
+                homeEntry.click();
+            } else {
+                window.location.hash = '#/';
+            }
         } else {
+            // In Desktop mode
             if (window.history.length > 1) {
                 window.history.back();
             } else {
@@ -340,26 +383,40 @@
         }
     }
 
+    // Expose globally for Electron main process
+    window.exitCurrentVideo = exitCurrentVideo;
+
     let backButtonTimeout = null;
     function ensureBackButton() {
         let btn = document.getElementById('omarchy-back-button');
         if (!btn) {
             btn = document.createElement('button');
             btn.id = 'omarchy-back-button';
+            btn.type = 'button';
             btn.title = 'Backa ur video (Escape / Backspace)';
-            btn.innerHTML = `
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                </svg>
-            `;
+
+            // TrustedHTML-compliant SVG creation
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z');
+            svg.appendChild(path);
+
+            const span = document.createElement('span');
+            span.textContent = 'Tillbaka';
+
+            btn.appendChild(svg);
+            btn.appendChild(span);
+
             btn.onclick = (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 exitCurrentVideo();
             };
             document.body.appendChild(btn);
         }
 
-        const isWatching = !!document.querySelector('video') && (window.location.href.includes('watch') || !!currentVideoId);
+        const isWatching = isWatchingVideo();
 
         if (isWatching) {
             btn.classList.add('visible');
@@ -369,14 +426,14 @@
                 if (v && !v.paused) {
                     btn.classList.remove('visible');
                 }
-            }, 3000);
+            }, 3500);
         } else {
             btn.classList.remove('visible');
         }
     }
 
     document.addEventListener('mousemove', ensureBackButton);
-    setInterval(ensureBackButton, 1000);
+    setInterval(ensureBackButton, 800);
 
     // In-page keyboard handler for Escape, Backspace, and 'q'
     window.addEventListener('keydown', (e) => {
@@ -389,8 +446,7 @@
         if (isInput && e.key !== 'Escape') return;
 
         if (e.key === 'Escape' || e.key === 'Backspace' || (e.key.toLowerCase() === 'q' && !isInput)) {
-            const isWatching = !!document.querySelector('video') && (window.location.href.includes('watch') || !!currentVideoId);
-            if (isWatching) {
+            if (isWatchingVideo()) {
                 exitCurrentVideo();
                 e.preventDefault();
             }

@@ -192,45 +192,51 @@ html, body {
 /* --- Level 8: Floating Quick-Back Button --- */
 #omarchy-back-button {
     position: fixed;
-    top: 24px;
-    left: 24px;
-    width: 44px;
-    height: 44px;
-    background: rgba(18, 18, 22, 0.88);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 50%;
+    top: 28px;
+    left: 28px;
+    height: 46px;
+    padding: 0 18px 0 14px;
+    background: rgba(15, 15, 20, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
+    border-radius: 24px;
     color: #ffffff;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
     cursor: pointer;
-    z-index: 2147483646;
+    z-index: 2147483647;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease, transform 0.2s ease, background 0.2s ease;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    transform: translateY(-8px);
+    transition: opacity 0.25s ease, transform 0.25s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
 #omarchy-back-button svg {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     fill: currentColor;
     transition: transform 0.2s ease;
 }
 
 #omarchy-back-button:hover {
-    background: rgba(35, 35, 42, 0.95);
+    background: rgba(25, 25, 32, 0.98);
     border-color: #00d482;
-    transform: scale(1.08);
+    color: #00d482;
+    transform: translateY(0) scale(1.04);
 }
 
 #omarchy-back-button:hover svg {
-    transform: translateX(-2px);
+    transform: translateX(-3px);
 }
 
 #omarchy-back-button.visible {
-    opacity: 1;
-    pointer-events: auto;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: translateY(0) !important;
 }

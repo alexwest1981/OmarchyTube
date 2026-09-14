@@ -1,67 +1,116 @@
-# 📺 OmarchyTube (ReVanced för Omarchy)
+# 📺 OmarchyTube
 
-En dedikerad, helskärmsoptimerad YouTube-applikation för **Omarchy** och **Hyprland**, inspirerad av YouTube ReVanced och SmartTube.
+> A dedicated, full-screen optimized YouTube client for **Omarchy** and **Hyprland**, inspired by YouTube ReVanced and SmartTube.
 
-Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsarkonst, med stöd för smidig **QR-kodsinloggning**, automatisk annonsblockering och **SponsorBlock**.
+[🇸🇪 Svenska](README.sv.md)
 
----
-
-## ✨ Funktioner
-
-- 📱 **Säker QR-kodsinloggning (TV/Leanback-läge)**:
-  - Ingen risk för Googles *"This browser or app may not be secure"*.
-  - Logga in med Googles officiella **OAuth Device Flow**: skanna QR-koden med mobilen eller gå till `youtube.com/activate`.
-- 🎛️ **Två visningslägen (Växla med <kbd>F2</kbd>)**:
-  - **TV-läge (Standard)**: YouTubes Leanback-gränssnitt optimerat för 100% ren helskärm, piltangenter och QR-inloggning.
-  - **Desktop-läge**: YouTubes vanliga webbgränssnitt för klassisk musnavigation.
-- 🛡️ **Annonsfritt på flera nivåer**:
-  - Nätverksblockering av Googles och YouTubes annons- och spårningsservrar.
-  - Kosmetisk rensning av sponsringsrutor och banners.
-  - Omedelbar automatisk överhoppning av eventuella videoreklaminslag.
-- ⚡ **SponsorBlock**:
-  - Hoppar automatiskt över sponsringsinslag, intron, outron och egen reklam via SponsorBlocks API.
-  - Visuella markeringar på tidslinjen och klickbar "Ångra"-knapp.
-- 🪟 **Byggd för Omarchy & Hyprland**:
-  - Körs med native Wayland (`--ozone-platform=wayland`) och hårdvaruacceleration.
-  - Fönsterklass: `OmarchyTube`.
+Designed to deliver a clean, distraction-free YouTube experience in a standalone Wayland window without browser bloat. Features seamless **QR Code sign-in**, multi-layer ad blocking, native **SponsorBlock**, and 100% responsive window fitting.
 
 ---
 
-## 🚀 Starta appen
+## ✨ Features
 
-1. **Från startmenyn (Super-tangenten / Walker / Rofi)**:
-   Sök efter **OmarchyTube**.
-2. **Från terminalen**:
-   ```bash
-   OmarchyTube
-   ```
-3. **Starta direkt i skrivbordsläge**:
-   ```bash
-   OmarchyTube --desktop
-   ```
+- 📱 **Seamless QR Code Sign-In (TV / Leanback Mode)**
+  - No risk of Google's *"This browser or app may not be secure"* error.
+  - Authenticates via Google's official **OAuth Device Flow**: simply scan the on-screen QR code with your phone camera or visit `youtube.com/activate`.
+  - Securely persists your session, subscriptions, history, and playlists.
+
+- 🎛️ **Dual View Modes (Toggle instantly with <kbd>F2</kbd>)**
+  - **TV Mode (Default)**: YouTube Leanback interface optimized for full-bleed display, arrow-key navigation, remote controls, and QR authentication.
+  - **Desktop Mode**: Standard YouTube desktop web interface for classic mouse and keyboard browsing.
+
+- 🛡️ **Multi-Layer Ad Blocking**
+  - **Network-Level**: Blocks requests to DoubleClick, Google AdServices, and YouTube ad tracking servers.
+  - **Cosmetic Filtering**: Removes sponsored banners, promotional sidebars, and recommendation clutter.
+  - **Video Skipping**: Instantly skips pre-roll and mid-roll video advertisements without countdown delays.
+
+- ⚡ **Built-In SponsorBlock**
+  - Automatically detects and skips sponsored segments, intros, outros, interaction reminders, and self-promotions using the official SponsorBlock API.
+  - Segment highlight markers on the progress bar with an on-screen "Unskip" toast button.
+
+- ↩️ **Floating Quick-Back Button & Video Exit**
+  - Floating **`[ ← Back ]`** button smoothly appears in the top-left corner on mouse movement while watching videos.
+  - Instantly exit playing videos and return to your browse feed via <kbd>Escape</kbd>, <kbd>Backspace</kbd>, or Mouse Back Button (Mouse 4).
+
+- 🪟 **Tailored for Omarchy & Hyprland**
+  - Native Wayland client (`--ozone-platform=wayland`).
+  - Hardware-accelerated video decoding (VA-API).
+  - Consistent window class (`StartupWMClass=OmarchyTube`) for easy Hyprland tiling, floating, and workspace rules.
+  - Eliminates letterboxing, ensuring 100% full window canvas fill.
 
 ---
 
-## ⌨️ Tangentbordskontroller
+## 🚀 Getting Started
 
-| Tangent / Mus | Funktion |
+### Launching the App
+- **Application Launcher (Walker / Rofi / Super key)**:
+  Search for **OmarchyTube**.
+- **Terminal**:
+  ```bash
+  OmarchyTube
+  ```
+- **Launch directly in Desktop Mode**:
+  ```bash
+  OmarchyTube --desktop
+  ```
+
+---
+
+## ⌨️ Controls & Shortcuts
+
+| Key / Mouse | Action |
 |---|---|
-| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | **Backa ur video till hemskärmen / feeden** |
-| Klick på `←`-knappen i hörnet | **Flytande tillbaka-knapp som visas vid musrörelse** |
-| Musknapp 4 (Bakåt) | Backa ur video / historik |
-| <kbd>F11</kbd> | Växla fönstrets helskärmsläge |
-| <kbd>F2</kbd> | **Växla direkt mellan TV-läge och Desktop-läge** |
-| <kbd>Pilar</kbd> + <kbd>Enter</kbd> | Navigera och välj i TV-läget |
-| <kbd>Mellanslag</kbd> / <kbd>k</kbd> | Spela / Pausa |
-| <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Ladda om sidan |
-| <kbd>Alt</kbd> + <kbd>Home</kbd> | Gå till startsidan |
+| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | **Exit playing video and return to home feed** |
+| Click **`[ ← Back ]`** button | **Floating exit button shown on mouse movement** |
+| Mouse Button 4 (Back) | Exit video / browser history back |
+| <kbd>F2</kbd> | **Toggle between TV Mode and Desktop Mode** |
+| <kbd>F11</kbd> | Toggle window fullscreen |
+| <kbd>Arrow Keys</kbd> + <kbd>Enter</kbd> | Navigate and select items in TV Mode |
+| <kbd>Space</kbd> / <kbd>k</kbd> | Play / Pause video |
+| <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Reload current page |
+| <kbd>Alt</kbd> + <kbd>Home</kbd> | Return to YouTube homepage |
 
 ---
 
-## 🔐 Hur inloggningen fungerar
+## 🔐 How Sign-In Works
 
-1. Starta appen (den öppnas i TV-läget som standard).
-2. Stega med piltangenterna till sidomenyn till vänster och klicka på **Logga in / Sign in**.
-3. En stor, tydlig **QR-kod** och en 8-siffrig aktiveringskod visas på skärmen.
-4. Skanna QR-koden med mobilens kamera (eller öppna [youtube.com/activate](https://youtube.com/activate) i din webbläsare).
-5. Tryck **Tillåt** – appen loggas in direkt och sparar dina spellistor och prenumerationer permanent!
+1. Launch **OmarchyTube** (starts in TV Mode by default).
+2. Use the arrow keys or mouse to navigate to the left sidebar and select **Sign in**.
+3. A large QR code and an 8-character activation code will appear on screen.
+4. Scan the QR code using your smartphone camera (or open [youtube.com/activate](https://youtube.com/activate) in any browser).
+5. Confirm access with your Google Account — the app connects immediately and preserves your login credentials.
+
+---
+
+## 🛠️ Installation from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/alexwest1981/OmarchyTube.git
+cd OmarchyTube
+
+# Install dependencies
+npm install
+
+# Run application
+npm start
+```
+
+### System Desktop Integration
+To register the desktop application and CLI shortcut on Arch Linux / Omarchy:
+
+```bash
+# Symlink executable to user bin
+ln -sf "$(pwd)/bin/omarchy-tube" ~/.local/bin/OmarchyTube
+
+# Install desktop entry
+mkdir -p ~/.local/share/applications
+cp OmarchyTube.desktop ~/.local/share/applications/
+update-desktop-database ~/.local/share/applications/
+```
+
+---
+
+## 📜 License
+
+MIT License. Designed with ❤️ for the Omarchy community.

@@ -1,0 +1,21 @@
+{
+  "name": "omarchy-tube",
+  "productName": "OmarchyTube",
+  "version": "1.0.0",
+  "description": "OmarchyTube - ReVanced YouTube Desktop för Omarchy",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron src/main.js --ozone-platform-hint=auto"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^44.3.0"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.18.2",
+    "cross-fetch": "^4.1.0"
+  }
+}

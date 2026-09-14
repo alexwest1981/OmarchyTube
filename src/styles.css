@@ -1,0 +1,166 @@
+/* ==========================================================================
+   OmarchyTube (ReVanced for Omarchy) - Custom Stylesheet
+   ========================================================================== */
+
+/* --- Level 1: Cosmetic Ad Blocking --- */
+#masthead-ad,
+ytd-ad-slot-renderer,
+ytd-in-feed-ad-layout-renderer,
+ytd-banner-promo-renderer,
+ytd-statement-banner-renderer,
+yt-mealbar-promo-renderer,
+ytd-compact-promoted-video-renderer,
+ytd-promoted-sparkles-web-renderer,
+#player-ads,
+.ytd-merch-shelf-renderer,
+ytd-action-companion-ad-renderer,
+ytd-promoted-video-renderer,
+ytd-display-ad-renderer,
+#fulfilled-layout,
+.ytp-ad-overlay-container,
+.ytp-ad-message-container {
+    display: none !important;
+}
+
+/* --- Level 2: YouTube Shorts Filtering (Enabled by default) --- */
+html.hide-shorts ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
+html.hide-shorts ytd-guide-entry-renderer:has(a[title="Shorts"]),
+html.hide-shorts ytd-mini-guide-entry-renderer[aria-label="Shorts"],
+html.hide-shorts ytd-reel-shelf-renderer {
+    display: none !important;
+}
+
+/* --- Level 3: SponsorBlock Progress Bar Segments --- */
+.ytp-progress-bar {
+    position: relative;
+}
+
+.sb-segment-marker {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    z-index: 35;
+    pointer-events: none;
+    opacity: 0.85;
+    border-radius: 1px;
+}
+
+.sb-segment-sponsor {
+    background-color: #00d482 !important; /* Green */
+}
+
+.sb-segment-intro,
+.sb-segment-outro {
+    background-color: #0284c7 !important; /* Blue */
+}
+
+.sb-segment-selfpromo {
+    background-color: #eab308 !important; /* Yellow */
+}
+
+.sb-segment-interaction {
+    background-color: #c084fc !important; /* Purple */
+}
+
+.sb-segment-music_offtopic {
+    background-color: #f97316 !important; /* Orange */
+}
+
+/* --- Level 4: ReVanced Toast Notification --- */
+#omarchy-toast-container {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 10px;
+    z-index: 2147483647;
+    pointer-events: none;
+}
+
+.omarchy-toast {
+    background: rgba(18, 18, 22, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: 4px solid #00d482;
+    color: #f3f4f6;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: auto;
+}
+
+.omarchy-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.omarchy-toast-undo {
+    background: #00d482;
+    color: #0a0a0c;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.omarchy-toast-undo:hover {
+    background: #10b981;
+}
+
+/* --- Level 5: Return YouTube Dislike (RYD) UI --- */
+.ryd-dislike-count {
+    margin-left: 6px;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--yt-spec-text-primary, #f1f1f1);
+}
+
+.ryd-ratio-bar {
+    width: 100%;
+    height: 3px;
+    background-color: #ef4444; /* Dislike red */
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+    display: flex;
+}
+
+.ryd-ratio-likes {
+    height: 100%;
+    background-color: #3b82f6; /* Like blue */
+    transition: width 0.3s ease;
+}
+
+/* --- Level 6: Clean Desktop App Polish --- */
+/* Custom slim scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+}

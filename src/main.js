@@ -2,6 +2,7 @@ const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const innertube = require('./innertube');
+const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
 
 // Hardware acceleration flags for Hyprland / Linux.
 //
@@ -34,6 +35,16 @@ if (process.platform === 'linux') {
 const { getUserAgentForMode } = require('./user-agent');
 
 let mainWindow = null;
+let pickerWindow = null;
+// En profil = en partition = en Google-session. Fönstren hålls kvar per profil
+// så att ett byte fram och tillbaka inte laddar om något.
+const profileWindows = new Map();
+const configuredPartitions = new Set();
+// Fönster -> profil, så att rutnätets InnerTube-anrop kan göras i rätt session
+// (det är kakan som gör flödet personligt).
+const windowProfiles = new Map();
+const profilesFile = path.join(app.getPath('userData'), 'profiles.json');
+const pickerPage = path.join(__dirname, 'profiles.html');
 const stateFile = path.join(app.getPath('userData'), 'window-state.json');
 
 function loadWindowState() {
@@ -152,16 +163,21 @@ function switchMode(newMode) {
     console.log(`[OmarchyTube] Switched mode to: ${currentMode}`);
 }
 
-function createWindow() {
+function createWindow(profile) {
     const windowState = loadWindowState();
-    const customSession = session.fromPartition('persist:omarchy-tube');
+    const customSession = session.fromPartition(partitionFor(profile.id));
 
-    configureSession(customSession);
+    // onBeforeRequest/onBeforeSendHeaders sätts en gång per partition: att göra
+    // det igen på samma session hade gett dubbla lyssnare.
+    if (!configuredPartitions.has(profile.id)) {
+        configureSession(customSession);
+        configuredPartitions.add(profile.id);
+    }
 
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
 
-    mainWindow = new BrowserWindow({
-        title: 'OmarchyTube',
+    const win = new BrowserWindow({
+        title: `OmarchyTube — ${profile.name}`,
         width: windowState.width || 1280,
         height: windowState.height || 800,
         minWidth: 640,
@@ -180,25 +196,32 @@ function createWindow() {
         }
     });
 
+    mainWindow = win;
+    profileWindows.set(profile.id, win);
+    windowProfiles.set(win.webContents.id, profile.id);
+    // Allt som redan pekar på mainWindow (tangenter, injektorn, sparat
+    // fönsterläge) följer den ruta användaren är i.
+    win.on('focus', () => { mainWindow = win; });
+
     if (windowState.isFullScreen) {
-        mainWindow.setFullScreen(true);
+        win.setFullScreen(true);
     } else if (windowState.isMaximized) {
-        mainWindow.maximize();
+        win.maximize();
     }
 
-    mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
+    win.webContents.setUserAgent(getUserAgentForMode(currentMode));
 
-    const injectResources = () => {
-        const url = mainWindow.webContents.getURL();
+    const injectResources = (contents) => {
+        const url = contents.getURL();
         if (url && url.includes('youtube.com')) {
             try {
                 const stylesPath = path.join(__dirname, 'styles.css');
                 const injectorPath = path.join(__dirname, 'injector.js');
                 if (fs.existsSync(stylesPath)) {
-                    mainWindow.webContents.insertCSS(fs.readFileSync(stylesPath, 'utf8'));
+                    contents.insertCSS(fs.readFileSync(stylesPath, 'utf8'));
                 }
                 if (fs.existsSync(injectorPath)) {
-                    mainWindow.webContents.executeJavaScript(fs.readFileSync(injectorPath, 'utf8')).catch((err) => {
+                    contents.executeJavaScript(fs.readFileSync(injectorPath, 'utf8')).catch((err) => {
                         console.error('[OmarchyTube] JS inject error:', err);
                     });
                 }
@@ -208,12 +231,22 @@ function createWindow() {
         }
     };
 
-    mainWindow.webContents.on('dom-ready', () => {
-        if (!mainWindow.webContents.getURL().startsWith('file://')) onBrowsePage = false;
-        injectResources();
+    win.webContents.on('dom-ready', () => {
+        if (!win.webContents.getURL().startsWith('file://')) onBrowsePage = false;
+        injectResources(win.webContents);
     });
 
-    loadBrowse();
+    // Inloggad? Då är det här hela YouTube: flödet kontot kurerat genom åren,
+    // prenumerationerna, historiken, listorna. Inte inloggad? Då går vi till
+    // YouTubes vanliga inloggning — den vägen har e-post, lösenord och
+    // tvåstegsverifiering och slutar inte i TV-appens QR-återvändsgränd.
+    // Partitionskakan gör att svaret gäller den här profilen.
+    customSession.cookies.get({ domain: '.youtube.com' })
+        .then((cookies) => {
+            const signedIn = cookies.some((c) => /^(SID|SAPISID|__Secure-1PSID|__Secure-3PSID)$/.test(c.name));
+            win.loadURL(signedIn ? getUrlForMode(currentMode) : 'https://www.youtube.com/');
+        })
+        .catch(() => win.loadURL('https://www.youtube.com/'));
 
     // Handle external links
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -248,6 +281,12 @@ function createWindow() {
             } else {
                 loadBrowse();
             }
+            event.preventDefault();
+        }
+
+        // Byt tittare: F3
+        if (input.key === 'F3' && input.type === 'keyDown') {
+            createPickerWindow();
             event.preventDefault();
         }
 
@@ -320,6 +359,85 @@ function createWindow() {
         }
     });
 
+    // Handle mouse 4 (Back) button
+    win.on('app-command', (e, cmd) => {
+        if (cmd === 'browser-backward') {
+            handleExitVideo();
+        }
+    });
+
+    win.on('close', () => {
+        saveWindowState();
+    });
+
+    win.on('closed', () => {
+        profileWindows.delete(profile.id);
+        windowProfiles.delete(win.webContents.id);
+        if (mainWindow === win) mainWindow = null;
+    });
+}
+
+// Väljaren: en liten ruta med en uppgift. Egen partition, så den inte delar
+// kaka med något konto.
+function createPickerWindow() {
+    if (pickerWindow && !pickerWindow.isDestroyed()) {
+        pickerWindow.show();
+        pickerWindow.focus();
+        return pickerWindow;
+    }
+
+    const iconPath = path.join(__dirname, 'assets', 'icon.png');
+    pickerWindow = new BrowserWindow({
+        width: 1000,
+        height: 660,
+        minWidth: 720,
+        minHeight: 520,
+        title: 'Vem skall titta? — OmarchyTube',
+        backgroundColor: '#0b0b0d',
+        icon: fs.existsSync(iconPath) ? iconPath : undefined,
+        autoHideMenuBar: true,
+        webPreferences: {
+            session: session.fromPartition('persist:omarchy-picker'),
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: false
+        }
+    });
+
+    pickerWindow.loadFile(pickerPage);
+    pickerWindow.on('closed', () => { pickerWindow = null; });
+
+    // Esc stänger väljaren bara när det redan finns en profilruta att gå
+    // tillbaka till — annars vore appen tom.
+    pickerWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'Escape' && input.type === 'keyDown' && mainWindow) {
+            pickerWindow.close();
+            event.preventDefault();
+        }
+    });
+
+    return pickerWindow;
+}
+
+function openProfile(id) {
+    const profile = findProfile(readProfiles(profilesFile), id);
+    if (!profile) return null;
+
+    const existing = profileWindows.get(profile.id);
+    if (existing && !existing.isDestroyed()) {
+        if (existing.isMinimized()) existing.restore();
+        existing.show();
+        existing.focus();
+        return existing;
+    }
+    return createWindow(profile);
+}
+
+// Allt som bara får registreras en gång. Låg tidigare inuti createWindow, vilket
+// gick bra så länge appen hade ett enda fönster — med ett fönster per profil
+// hade ipcMain.handle kastat på den andra registreringen.
+function registerIpc() {
     function handleExitVideo() {
         if (!mainWindow) return;
 
@@ -366,8 +484,12 @@ function createWindow() {
     });
 
     // The grid's two ways to YouTube's data, and its one way to play.
-    ipcMain.handle('omarchy-browse-home', () => innertube.home());
-    ipcMain.handle('omarchy-browse-search', (_event, query) => innertube.search(String(query || '')));
+    const partitionOf = (sender) => {
+        const id = windowProfiles.get(sender.id);
+        return id ? partitionFor(id) : undefined;
+    };
+    ipcMain.handle('omarchy-browse-home', (event) => innertube.home(partitionOf(event.sender)));
+    ipcMain.handle('omarchy-browse-search', (event, query) => innertube.search(String(query || ''), partitionOf(event.sender)));
     // Playback happens on YouTube's desktop watch page. Measured: it loads the
     // right video signed out (duration 1793 s for the video the fixture holds),
     // while the TV app's own watch route never opened — it bounced back to its
@@ -381,28 +503,42 @@ function createWindow() {
         mainWindow.loadURL(`https://www.youtube.com/watch?v=${videoId}`);
     });
 
-    // Handle mouse 4 (Back) button
-    mainWindow.on('app-command', (e, cmd) => {
-        if (cmd === 'browser-backward') {
-            handleExitVideo();
-        }
+    // Profilerna: listan bor i userData, valet öppnar ett fönster i den
+    // profilens session.
+    ipcMain.handle('omarchy-profiles:list', () => readProfiles(profilesFile));
+
+    ipcMain.handle('omarchy-profiles:add', (_event, name) => {
+        const result = addProfile(readProfiles(profilesFile), name);
+        if (!result) return readProfiles(profilesFile);
+        writeProfiles(profilesFile, result.list);
+        console.log(`[OmarchyTube] Profil tillagd: ${result.profile.name} (${result.profile.id})`);
+        return result.list;
     });
 
-    mainWindow.on('close', () => {
-        saveWindowState();
+    ipcMain.handle('omarchy-profiles:remove', (_event, id) => {
+        const list = removeProfile(readProfiles(profilesFile), String(id));
+        writeProfiles(profilesFile, list);
+        const open = profileWindows.get(String(id));
+        if (open && !open.isDestroyed()) open.close();
+        return list;
     });
 
-    mainWindow.on('closed', () => {
-        mainWindow = null;
+    ipcMain.handle('omarchy-profiles:pick', (_event, id) => {
+        openProfile(String(id));
+        return true;
     });
 }
 
 app.whenReady().then(() => {
-    createWindow();
+    registerIpc();
+
+    // Första skärmen är frågan, inte en tom ruta: vem skall titta? Svaret avgör
+    // vilken Google-session resten av appen pratar med.
+    createPickerWindow();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
+            createPickerWindow();
         }
     });
 });

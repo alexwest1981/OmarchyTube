@@ -75,6 +75,7 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 | Click **`[ ← Back ]`** button | **Floating exit button shown on mouse movement** |
 | Mouse Button 4 (Back) | Exit video / browser history back |
 | <kbd>F2</kbd> | **Toggle between TV Mode and Desktop Mode** |
+| <kbd>F3</kbd> | **Switch viewer** (open the profile picker) |
 | <kbd>F11</kbd> | Toggle window fullscreen |
 | <kbd>Arrow Keys</kbd> + <kbd>Enter</kbd> | Navigate and select items in TV Mode |
 | <kbd>Space</kbd> / <kbd>k</kbd> | Play / Pause video |
@@ -85,19 +86,31 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 
 ## 🔐 How Sign-In Works
 
-1. Launch **OmarchyTube**. It opens on its own grid.
-2. The grid works without an account: **search** is answered signed out, the
-   **home feed** is not — YouTube answers it with nothing until you have an
-   account (its own words are *"Your YouTube history is off"*). The grid says so
-   and shows a search while you are signed out.
-3. Press <kbd>F1</kbd> to open YouTube's own TV view, then use the arrow keys to
-   navigate to the left sidebar and select **Sign in**.
-4. A large **QR code** and an 8-character activation code appear on screen.
-5. Scan the QR code with your phone camera (or open [youtube.com/activate](https://youtube.com/activate) in any browser).
-6. Confirm access with your Google Account — the app connects immediately and keeps the session.
-7. Press <kbd>Alt</kbd> + <kbd>Home</kbd> (or <kbd>F1</kbd>) to come back to the
-   grid: the home feed is personal now, because the grid's requests run in the
-   same session the sign-in just filled.
+OmarchyTube asks **"Vem skall titta?"** (who is watching) before anything else.
+One profile is one Google session — its own feed, subscriptions, history and
+playlists, in its own session partition — so sharing the machine does not mean
+sharing recommendations.
+
+1. Launch **OmarchyTube**. The first screen is the profile picker, not a video
+   page: pick a profile with the arrow keys and <kbd>Enter</kbd>, or press
+   <kbd>N</kbd> to add one.
+2. A new profile opens **YouTube's own page** in that profile's session, with
+   YouTube's normal sign-in — email, password, two-factor, the works. (The TV
+   app's QR-code route is still available one key away in TV mode, but it is no
+   longer the way in, and there is no dead end if you would rather type your
+   address.)
+3. Once signed in, the profile opens straight onto YouTube in the mode you left
+   it in: <kbd>F2</kbd> switches between TV mode (`youtube.com/tv`, the full
+   ten-foot experience) and desktop mode (`youtube.com`).
+4. <kbd>F1</kbd> shows the app's own grid inside that same profile. Its requests
+   run through the profile's session, so the home feed shown there is the one
+   the account has curated.
+5. <kbd>F3</kbd> brings the picker back to switch viewer. Each profile keeps its
+   own window, so switching is a focus change, not a reload.
+
+The picker lives in `userData/profiles.json`; the accounts live in Chromium's
+own session partitions (`persist:omarchy-tube-<id>`) and are removed with the
+profile.
 
 ## 🛠️ Installation from Source
 

@@ -12,7 +12,15 @@ try {
         // and hands a chosen video back to the main process to play.
         browseHome: () => ipcRenderer.invoke('omarchy-browse-home'),
         browseSearch: (query) => ipcRenderer.invoke('omarchy-browse-search', query),
-        play: (videoId) => ipcRenderer.send('omarchy-play', videoId)
+        play: (videoId) => ipcRenderer.send('omarchy-play', videoId),
+        // Profilväljaren (profiles.html) når listan genom dessa fyra. Den ritar
+        // bara; reglerna bor i main-processen.
+        profiles: {
+            list: () => ipcRenderer.invoke('omarchy-profiles:list'),
+            add: (name) => ipcRenderer.invoke('omarchy-profiles:add', name),
+            remove: (id) => ipcRenderer.invoke('omarchy-profiles:remove', id),
+            pick: (id) => ipcRenderer.invoke('omarchy-profiles:pick', id)
+        }
     });
 } catch (err) {
     console.error('[OmarchyTube] Preload bridge error:', err);

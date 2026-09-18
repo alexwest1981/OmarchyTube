@@ -64,6 +64,7 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 | Musknapp 4 (Bakåt) | Backa ur video / historik |
 | <kbd>F11</kbd> | Växla fönstrets helskärmsläge |
 | <kbd>F2</kbd> | **Växla direkt mellan TV-läge och Desktop-läge** |
+| <kbd>F3</kbd> | **Byt tittare** (öppnar profilväljaren) |
 | <kbd>Pilar</kbd> + <kbd>Enter</kbd> | Navigera och välj i TV-läget |
 | <kbd>Mellanslag</kbd> / <kbd>k</kbd> | Spela / Pausa |
 | <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Ladda om sidan |
@@ -73,17 +74,26 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 
 ## 🔐 Hur inloggningen fungerar
 
-1. Starta appen. Den öppnar i sitt **eget rutnät**.
-2. Rutnätet fungerar utan konto: **sökningen** svarar inloggningsfri, men
-   **hemflödet** gör det inte — YouTube svarar med ingenting förrän du har ett
-   konto (dess eget svar är *"Your YouTube history is off"*). Rutnätet säger det
-   och visar en sökning så länge du är utloggad.
-3. Tryck <kbd>F1</kbd> för att öppna YouTubes egen TV-vy, stega med piltangenterna
-   till sidomenyn till vänster och välj **Logga in / Sign in**.
-4. En stor, tydlig **QR-kod** och en 8-siffrig aktiveringskod visas på skärmen.
-5. Skanna QR-koden med mobilens kamera (eller öppna [youtube.com/activate](https://youtube.com/activate) i din webbläsare).
-6. Tryck **Tillåt** – appen loggas in direkt och sparar inloggningen.
-7. Tryck <kbd>Alt</kbd> + <kbd>Home</kbd> (eller <kbd>F1</kbd>) för att gå tillbaka
-   till rutnätet: hemflödet är personligt nu, för rutnätets anrop går i samma
-   session som inloggningen fyllde.
+OmarchyTube frågar **"Vem skall titta?"** innan något annat. En profil är en
+Google-session — eget flöde, egna prenumerationer, egen historik och egna listor,
+i sin egen partition — så att låna ut datorn inte betyder att låna ut sina
+rekommendationer.
+
+1. Starta **OmarchyTube**. Första skärmen är profilväljaren, inte en videosida:
+   välj med piltangenterna och <kbd>Enter</kbd>, eller tryck <kbd>N</kbd> för att
+   lägga till en profil.
+2. En ny profil öppnar **YouTubes egen sida** i den profilens session, med
+   YouTubes vanliga inloggning — e-post, lösenord, tvåstegsverifiering. (TV-appens
+   QR-kod finns kvar ett tangenttryck bort i TV-läget, men är inte längre vägen in,
+   och det finns ingen återvändsgränd om du hellre skriver din adress.)
+3. När du är inloggad öppnas profilen direkt på YouTube i det läge du lämnade:
+   <kbd>F2</kbd> växlar mellan TV-läget (`youtube.com/tv`, hela tiofotsupplevelsen)
+   och skrivbordsläget (`youtube.com`).
+4. <kbd>F1</kbd> visar appens eget rutnät i samma profil. Anropen går genom
+   profilens session, så hemflödet där är det kontot har kurerat.
+5. <kbd>F3</kbd> tar tillbaka väljaren så du kan byta tittare. Varje profil har
+   sitt eget fönster, så ett byte är ett fokusbyte, inte en omladdning.
+
+Profilerna ligger i `userData/profiles.json`; kontona ligger i Chromiums egna
+session-partitioner (`persist:omarchy-tube-<id>`) och försvinner med profilen.
 

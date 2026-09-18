@@ -21,7 +21,11 @@ const { planForSession } = require('./sign-in');
 // and no error. A leanback player that answers a keypress with silence is
 // broken, so the policy is lifted.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('disable-vulkan');
+// Mätt i Alex terminal 2026-09-18: "'--ozone-platform=wayland' is not compatible
+// with Vulkan" — trots att raden nedan stod här. 'disable-vulkan' är ingen
+// riktig Chromium-flagga (den gör ingenting), så Vulkan var fortfarande på.
+// Rätt väg är att stänga av featuren, som Chromiums egen feltext föreslår.
+app.commandLine.appendSwitch('disable-features', 'Vulkan');
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL,VaapiVideoDecoder');
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 
@@ -243,8 +247,10 @@ function createWindow(profile) {
     };
 
     win.webContents.on('dom-ready', () => {
-        if (!win.webContents.getURL().startsWith('file://')) onBrowsePage = false;
+        const url = win.webContents.getURL();
+        if (!url.startsWith('file://')) onBrowsePage = false;
         injectResources(win.webContents);
+        if (url.includes('youtube.com')) measureView(win);
     });
 
     if (profile) {
@@ -388,6 +394,33 @@ function createWindow(profile) {
         windowProfiles.delete(contentsId);
         if (mainWindow === win) mainWindow = null;
     });
+}
+
+// Alex 2026-09-18: YouTubes TV-app ritade sig i en fjärdedel av rutan, uppe till
+// vänster, och inloggningssidan blev "alldeles för förminskad". Det är vad en sida
+// ser ut som när den är utzoomad — och zoomnivån sparas per sajt och partition i
+// Chromium, så den kan ha följt med från ett tidigare varv. Vi sätter den till 1
+// vid varje navigering och skriver ut vad sidan tror om rutan, så nästa gång står
+// svaret i terminalen i stället för i en gissning.
+function measureView(win) {
+    try {
+        win.webContents.setZoomFactor(1);
+        win.webContents.setZoomLevel(0);
+    } catch (err) {
+        console.warn('[OmarchyTube] Kunde inte nollställa zoom:', err.message);
+    }
+    win.webContents.executeJavaScript(`(() => ({
+        view: [innerWidth, innerHeight],
+        dpr: devicePixelRatio,
+        screen: [screen.width, screen.height],
+        rootFont: getComputedStyle(document.documentElement).fontSize
+    }))()`).then((seen) => {
+        const bounds = win.getBounds();
+        const mismatch = seen.view[0] !== bounds.width || seen.view[1] !== bounds.height;
+        console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | sidan säger ${seen.view[0]}x${seen.view[1]}`
+            + ` | dpr ${seen.dpr} | skärm ${seen.screen[0]}x${seen.screen[1]} | rotfont ${seen.rootFont}`
+            + (mismatch ? '  <-- sidan och rutan är inte samma storlek' : ''));
+    }).catch(() => {});
 }
 
 // TV-appens inloggning ligger ett Enter bort från dess hemskärm (första valet

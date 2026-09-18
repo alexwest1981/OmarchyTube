@@ -8,6 +8,9 @@
 // before any profile is chosen.
 const { net, session } = require('electron');
 const { extractItems } = require('./innertube-extract');
+// Samma regel som avgör om en profil är inloggad (src/sign-in.js) — en sanning,
+// inte två.
+const { isSignedIn } = require('./sign-in');
 
 // The public web key youtube.com itself hands to its own pages via ytcfg; it is
 // not a secret and not tied to an account.
@@ -43,14 +46,26 @@ const home = (partition) => run('home', 'browse', { browseId: 'FEwhat_to_watch' 
 const search = (query, partition) => run(`search "${query}"`, 'search', { query }, partition);
 
 async function run(what, endpoint, body, partition) {
+    const where = partition || PARTITION;
     try {
         const items = await post(endpoint, body, partition);
         const result = extractItems(items);
-        console.log(`[OmarchyTube] InnerTube ${what}: ${result.length} träffar (${partition || PARTITION})`);
+        console.log(`[OmarchyTube] InnerTube ${what}: ${result.length} träffar (${where}, konto: ${await accountLabel(where)})`);
         return result;
     } catch (err) {
-        console.error(`[OmarchyTube] InnerTube ${what} misslyckades (${partition || PARTITION}):`, err.message);
+        console.error(`[OmarchyTube] InnerTube ${what} misslyckades (${where}, konto: ${await accountLabel(where)}):`, err.message);
         throw err;
+    }
+}
+
+// "0 träffar" betyder olika saker beroende på om partitionen har ett konto:
+// utan konto är det YouTubes riktiga svar, med konto är det vår bugg. Mätt
+// 2026-09-18 när Alex rutnät var tomt och ingen kunde se vilket det var.
+async function accountLabel(partition) {
+    try {
+        return isSignedIn(await session.fromPartition(partition).cookies.get({ domain: '.youtube.com' })) ? 'ja' : 'nej';
+    } catch (err) {
+        return `okänt (${err.message})`;
     }
 }
 

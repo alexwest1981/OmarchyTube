@@ -12,6 +12,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const { FALLBACK_QUERY, FALLBACK_NOTE, fallbackQuery } = require('../src/signed-out');
 
@@ -35,10 +36,9 @@ test('saknad lista kraschar inte, utan behandlas som tom', () => {
     assert.strictEqual(fallbackQuery('home', undefined), FALLBACK_QUERY);
 });
 
-test('notisen förklarar båda vägarna ut, och lämnar plats för frågan', () => {
+test('notisen förklarar båda vägarna ut', () => {
     assert.match(FALLBACK_NOTE, /youtube\.com\/activate/, 'inloggningsvägen ska stå i notisen');
     assert.match(FALLBACK_NOTE, /F1/, 'tangenten som öppnar TV-vyn ska stå i notisen');
-    assert.match(FALLBACK_NOTE, /QUERY/, 'platshållaren som sidan byter mot frågan');
 });
 
 test('sidan läser modulen i stället för att ha en egen kopia', () => {
@@ -52,4 +52,25 @@ test('sidan läser modulen i stället för att ha en egen kopia', () => {
     assert.ok(js.includes('window.OmarchySignedOut'), 'browse.js läser inte modulen');
     assert.ok(!js.includes("'music'"), 'fallback-frågan ska bara finnas i signed-out.js');
     assert.ok(js.includes('notice.textContent'), 'notisen får aldrig någon text');
+});
+
+// Mätt 2026-09-18: browse.html laddar signed-out.js och browse.js som två
+// klassiska skript, alltså en gemensam global skopa för const/let på toppnivå.
+// När signed-out.js deklarerade FALLBACK_QUERY på toppnivå dog browse.js med
+// "Identifier 'FALLBACK_QUERY' has already been declared" och rutnätet ritade
+// ingenting alls. Provet nedan laddar båda filerna i en och samma kontext, som
+// sidan gör: allt utom SyntaxError är väntat (browse.js vill ha DOM).
+test('båda skripten kan laddas i samma globala skopa', () => {
+    const context = vm.createContext({ window: {}, console });
+    const load = (file) => vm.runInContext(
+        fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
+
+    load('src/signed-out.js');
+    try {
+        load('src/browse.js');
+    } catch (err) {
+        assert.notStrictEqual(err.constructor.name, 'SyntaxError',
+            'toppnamn krockar mellan skripten: ' + err.message);
+    }
+    assert.ok(context.window.OmarchySignedOut, 'signed-out.js exponerade inget på window');
 });

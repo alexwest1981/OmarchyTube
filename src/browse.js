@@ -9,7 +9,7 @@ const status = document.getElementById('status');
 const query = document.getElementById('query');
 
 const notice = document.getElementById('notice');
-const { FALLBACK_QUERY, FALLBACK_NOTE, fallbackQuery } = window.OmarchySignedOut;
+const { FALLBACK_NOTE, fallbackQuery } = window.OmarchySignedOut;
 
 const state = { items: [], index: 0 };
 
@@ -103,10 +103,10 @@ async function load(kind, text) {
             notice.hidden = false;
             if (fallback) {
                 query.value = fallback;
-                notice.textContent = FALLBACK_NOTE.replace('QUERY', `\u201c${fallback}\u201d`);
+                notice.textContent = FALLBACK_NOTE;
                 return load('search', fallback);
             }
-            notice.textContent = FALLBACK_NOTE.replace('QUERY', `\u201c${query.value.trim()}\u201d`);
+            notice.textContent = FALLBACK_NOTE;
             status.textContent = 'No results';
         } else {
             notice.hidden = true;

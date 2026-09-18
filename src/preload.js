@@ -10,7 +10,8 @@ try {
             add: (name) => ipcRenderer.invoke('omarchy-profiles:add', name),
             remove: (id) => ipcRenderer.invoke('omarchy-profiles:remove', id),
             pick: (id) => ipcRenderer.invoke('omarchy-profiles:pick', id),
-            mode: (next) => ipcRenderer.invoke('omarchy-profiles:mode', next)
+            mode: (next) => ipcRenderer.invoke('omarchy-profiles:mode', next),
+            current: () => ipcRenderer.invoke('omarchy-profiles:current')
         }
     });
 } catch (err) {

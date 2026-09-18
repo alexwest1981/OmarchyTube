@@ -1,72 +1,70 @@
 # OmarchyTube
 
-Asks **who is watching**, then opens YouTube for that person — in a browser
-window with its own Google session.
-
-That is the whole app. It asks, it opens, it closes itself.
-
-## Why it is this small
-
-The first version tried to be the browser: its own video grid over YouTube's
-internal API, canned CSS injected into YouTube's pages, a "TV mode" with a
-spoofed SmartTV user agent, its own sign-in flow. Every part of that fought
-something we could not win:
-
-* **Sign-in.** Google refuses the password form inside an embedded browser
-  (`Couldn't sign you in — This browser or app may not be secure`). Measured,
-  twice. In a real browser it just works.
-* **TV mode.** YouTube's TV app computes its text scale from the window width,
-  squared: a 941 px window gave a root font of 5.88 px against 24 px at 1920 —
-  a quarter of the picture, unreadable. YouTube's design, not a bug we can fix.
-* **The shell.** Our injected geometry rules (`#container` forced to 100vw/100vh)
-  hit YouTube's desktop page, which has **seven** elements with that id —
-  masthead, player, playlist panel — and left the page in a band at the top with
-  everything else clipped.
-* **Rendering.** Electron on Wayland gave `setZoomFactor(0.49)` a
-  `devicePixelRatio` of 0.49 instead of a page zoom, so the layout said 1920 CSS
-  px while the surface painted at window size.
-
-Each of those is already solved in a browser, by people who do it for a living.
-So the app does the part that was actually ours: the question, and keeping the
-sessions apart. Every profile gets its own `--user-data-dir`, so signing in as
-someone else never touches your own feed, history or subscriptions.
+Asks **who is watching**, then opens YouTube inside the app for that person —
+one window, one Google session per profile.
 
 ## Using it
 
-1. Launch **OmarchyTube** — the profile picker is the only window.
-2. <kbd>↵</kbd> on a profile opens that profile's browser window at
-   <kbd>youtube.com</kbd>. The launcher closes itself as soon as the browser is
-   up.
-3. Sign in once per profile, in that window. Google treats it as an ordinary
-   browser, because it is one.
-4. <kbd>N</kbd> adds a profile. <kbd>F2</kbd> switches the launcher between
-   desktop and TV mode (TV opens `youtube.com/tv` — for a big screen).
-   <kbd>Delete</kbd> twice removes a profile; its browser directory stays behind
-   for you to delete if the account should go too.
+1. Launch **OmarchyTube**: the profile picker is the window.
+2. <kbd>↵</kbd> on a profile opens YouTube in that window, in that profile's own
+   session partition.
+3. First time on a profile: YouTube's TV sign-in shows a **QR code and an
+   eight-character code** (the first item on that screen is *Get started* — press
+   <kbd>↵</kbd> if you are not there yet). Scan it with your phone, or press
+   <kbd>F4</kbd> to open `yt.be/activate` in a browser and type the code there.
+   The account lands in that profile and stays there.
+4. <kbd>F3</kbd> brings the picker back in the same window, <kbd>Esc</kbd> goes
+   back to the profile, <kbd>F2</kbd> switches desktop/TV mode,
+   <kbd>F11</kbd> is fullscreen. <kbd>N</kbd> adds a profile, <kbd>Delete</kbd>
+   twice removes one.
 
 ```sh
 omarchy-tube            # the picker
-omarchy-tube --tv       # start in TV mode
-omarchy-tube --desktop  # start in desktop mode
-OMARCHYTUBE_BROWSER=chromium omarchy-tube   # a different browser
+omarchy-tube --tv       # start on youtube.com/tv
+omarchy-tube --desktop  # start on youtube.com
 ```
 
-## What it needs
+## Why sign-in goes through the TV screen
 
-* **Electron** (the picker window) — `npm install`.
-* **A Chromium-family browser on `PATH`** — `brave` by default, override with
-  `OMARCHYTUBE_BROWSER`.
+The obvious route — YouTube's normal password form — is closed to every
+embedded browser. Measured twice, from a real run:
 
-The browser is where YouTube lives; the launcher never loads a YouTube page
-itself and injects nothing anywhere.
+> **Couldn't sign you in.** This browser or app may not be secure.
+
+The TV client's device flow is the route Google does open, and it is the one
+that puts the account inside the app's own session: the screen shows a QR code
+and an eight-character code, you confirm it on your phone or at
+`yt.be/activate`, and the app is signed in. It cannot be automated away — the
+code has to travel from the app's screen to a device Google trusts.
+
+## What this app does not do
+
+It does not touch YouTube's pages. No CSS, no JavaScript, no zoom, no scaling.
+That rule came from measurement, not taste:
+
+* Injected geometry (`#container` forced to `100vw`/`100vh`, `overflow: hidden`
+  on `html, body`) hit YouTube's desktop page, which has **seven** elements with
+  that id — masthead, player, playlist panel, channel name — and left the page in
+  a band at the top with everything else clipped.
+* `setZoomFactor(0.49)` on Wayland became a `devicePixelRatio` of 0.49 instead of
+  a page zoom: the layout reported 1920 CSS px while the surface painted at window
+  size, so the picture sat in one quarter of the window.
+* The TV app computes its own text scale from the window width, squared: 941 px
+  gave a root font of 5.88 px against 24 px at 1920. That is YouTube's design, so
+  TV mode maximises the window instead of fighting it.
+
+What the app does own: the window, the question, the session partition per
+profile, the user agent each mode needs, and blocking YouTube's ad endpoints at
+the network layer.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `src/main.js` | the picker window, the IPC, and the launch — nothing else |
+| `src/main.js` | the window, the keys, the session rules, the launch |
 | `src/profiles.js` | the profile list (`userData/profiles.json`), pure and tested |
-| `src/browser-launch.js` | the browser command per profile, pure and tested |
+| `src/user-agent.js` | the TV and desktop identities, pure and tested |
+| `src/sign-in.js` | signed in ⇒ mode page, signed out ⇒ TV sign-in, pure and tested |
 | `src/profiles.html/.css/-page.js` | the "who is watching" screen |
 | `src/preload.js` | the renderer's entire surface: five profile channels |
 
@@ -76,8 +74,7 @@ itself and injects nothing anywhere.
 npm test
 ```
 
-23 tests: the profile rules (ids must survive being directory names, two
-profiles may never share one), the browser command (a profile always gets its
-own directory, the URL follows the mode), the IPC channels (every `invoke` has
-a `handle`), and one architecture test that fails if the deleted layer — an
-injector, an embedded YouTube page, a spoofed user agent — ever comes back.
+30 tests: the profile rules (ids must survive being partition names, two profiles
+may never share one), the user agent per mode, the sign-in decision, the IPC
+channels, and an architecture test that fails if an injector, a zoom call or a
+page script ever comes back.

@@ -1,27 +1,36 @@
-// OmarchyTube — vem skall titta?
+// OmarchyTube — vem skall titta, och sedan YouTube i den här rutan.
 //
-// Appen gör tre saker och inget mer:
+// Efter rivningen 2026-09-18 är regeln: appen äger fönstret, frågan och
+// sessionerna. Den rör inte YouTubes sidor. Ingen injicerad CSS, ingen injicerad
+// JS, ingen zoom, ingen egen skalning — varje gång vi la oss i deras layout blev
+// det sämre:
 //
-//   1. frågar vem som skall titta (profiles.json i userData)
-//   2. startar webbläsaren med den profilens egen --user-data-dir
-//   3. stänger sig
+//   * våra geometriregler (tvinga #container till 100vw/100vh) träffade
+//     skrivbordssidan, som har SJU element med det id:t, och la hela sidan i ett
+//     band högst upp med resten bortklippt;
+//   * setZoomFactor(0.49) blev dpr 0,49 på Wayland: layouten sa 1920 CSS-px
+//     medan ytan målades i fönstrets storlek — innehåll i en fjärdedels ruta;
+//   * en funktion som deklareras inuti en annan (handleExitVideo i registerIpc)
+//     gjorde Esc stendöd utan ett ljud.
 //
-// Varför så litet: kvällen 2026-09-18 byggde vi YouTube inuti appen — eget
-// rutnät, injicerad CSS, TV-läge, UA-spoofning, egen inloggning — och det gick
-// inte att få bra. Google vägrar lösenordsinloggning i en inbäddad webbläsare
-// ("Couldn't sign you in — This browser or app may not be secure"), YouTubes
-// TV-app räknar sin textskala ur fönsterbredden och blir oläslig i en tilad ruta
-// (mätt: 941 px gav rotfont 5,88 px mot 24 px vid 1920), och Electronns zoom
-// blev ett devicePixelRatio på 0,49 — alltså innehållet i en fjärdedel av rutan.
-// Allt det där är någon annans problem i en webbläsare och redan löst där. Kvar
-// är det som faktiskt var vårt: frågan och sessionsisoleringen.
-const { app, BrowserWindow, ipcMain } = require('electron');
-const { spawn } = require('child_process');
+// Det vi gör är fönstret, sessionen, webbläsaridentiteten och läget. Inloggningen
+// går via Googles TV-flöde (QR-koden) eftersom Google vägrar lösenordsformuläret
+// i en inbäddad webbläsare — mätt: "Couldn't sign you in — This browser or app
+// may not be secure".
+const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { addProfile, findProfile, readProfiles, removeProfile, writeProfiles } = require('./profiles');
-const { browserCommand } = require('./browser-launch');
+const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
+const { getUserAgentForMode } = require('./user-agent');
+const { planForSession } = require('./sign-in');
+
+// Spelaren startar när sidan byts (användaren tryckte Enter i TV-appen och
+// fönstret laddar en tittarsida). Chromium räknar bara gester på sidan själv —
+// mätt: tittarsidan kom upp med en pausad <video> på t=0 och utan fel. En
+// leanback-spelare som svarar på en tangent med tystnad är trasig, så policyn är
+// lyft. Detta är den ENDA sida vi rör, och den rör bara uppspelning.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 app.name = 'OmarchyTube';
 app.setName('OmarchyTube');
@@ -32,6 +41,16 @@ if (process.platform === 'linux') {
 const argv = process.argv.slice(2);
 const profilesFile = path.join(app.getPath('userData'), 'profiles.json');
 const stateFile = path.join(app.getPath('userData'), 'picker-state.json');
+const pickerPage = path.join(__dirname, 'profiles.html');
+// Startfönstret (väljaren) behöver ingen session alls — men ett fönster måste ha
+// en, och den här rör inget konto.
+const PICKER_PARTITION = 'persist:omarchy-picker';
+
+let mainWindow = null;
+const configuredPartitions = new Set();
+// Fönster -> profil, så att rutnätet ... nej: så att appen vet vilken session
+// rutan visar (Esc i väljaren går tillbaka till rätt profil).
+const windowProfiles = new Map();
 
 function readState() {
     try {
@@ -49,59 +68,247 @@ function writeState(patch) {
     }
 }
 
-// Skrivbordsläge är standard: TV-läget vill ha en bred skärm (mätt: YouTubes
-// TV-app skalar sin text med kvadraten på fönsterbredden), så det skall vara ett
-// val och inte en överraskning.
-let mode = argv.includes('--tv') ? 'tv'
+// Skrivbordsläge är standard: YouTubes TV-app räknar sin textskala ur
+// fönsterbredden i kvadrat (mätt: 941 px gav rotfont 5,88 px mot 24 px vid 1920),
+// så TV-läget vill ha en bred skärm och skall vara ett val, inte en överraskning.
+let currentMode = argv.includes('--tv') ? 'tv'
     : argv.includes('--desktop') ? 'desktop'
         : (readState().mode || 'desktop');
 
-let mainWindow = null;
+const getUrlForMode = (mode) => (mode === 'tv' ? 'https://www.youtube.com/tv' : 'https://www.youtube.com');
 
-// Kvittensen: appen skall inte stå kvar och se ut som en spelare när jobbet är
-// gjort. Mätt hos Alex: rutan stod kvar på "Öppnar Alex" medan webbläsaren redan
-// var öppnad — alltså såg appen trasig ut när den var klar.
-const CLOSE_DELAY_MS = 1200;
+function configureSession(targetSession) {
+    targetSession.webRequest.onBeforeSendHeaders((details, callback) => {
+        details.requestHeaders['User-Agent'] = getUserAgentForMode(currentMode);
+        if (currentMode === 'desktop') {
+            details.requestHeaders['Sec-CH-UA'] = '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"';
+            details.requestHeaders['Sec-CH-UA-Mobile'] = '?0';
+            details.requestHeaders['Sec-CH-UA-Platform'] = '"Linux"';
+        } else {
+            delete details.requestHeaders['Sec-CH-UA'];
+            delete details.requestHeaders['Sec-CH-UA-Mobile'];
+            delete details.requestHeaders['Sec-CH-UA-Platform'];
+        }
+        callback({ cancel: false, requestHeaders: details.requestHeaders });
+    });
 
-function launch(profile) {
-    const command = browserCommand(app.getPath('userData'), profile, mode);
-    try {
-        fs.mkdirSync(command.dir, { recursive: true });
-        const child = spawn(command.command, command.args, { detached: true, stdio: 'ignore' });
-        child.unref(); // webbläsaren lever vidare när appen stänger sig
-    } catch (err) {
-        // Utan det här såg en misslyckad start ut som en app som gjorde ingenting:
-        // rutan stängde sig och ingen webbläsare kom. Felet skall upp i rutan.
-        console.error(`[OmarchyTube] Kunde inte starta ${command.command}:`, err.message);
-        return { ok: false, message: `Kunde inte starta ${command.command}: ${err.message}` };
-    }
-
-    console.log(`[OmarchyTube] ${profile.name} → ${command.command} (${mode}, ${command.dir})`);
-    return { ok: true, message: `Öppnar ${profile.name} i ${command.command} (${mode === 'tv' ? 'TV-läge' : 'skrivbordsläge'}) …` };
+    // YouTube ad network blocking (never blocking Google Auth)
+    targetSession.webRequest.onBeforeRequest(
+        {
+            urls: [
+                '*://*.doubleclick.net/*',
+                '*://*.googleadservices.com/*',
+                '*://*.googlesyndication.com/*',
+                '*://*.youtube.com/api/stats/ads*',
+                '*://*.youtube.com/pagead/*',
+                '*://*.youtube.com/ptracking*',
+                '*://*.youtube.com/get_midroll_info*'
+            ]
+        },
+        (details, callback) => {
+            if (details.url.includes('accounts.google.com') ||
+                details.initiator?.includes('accounts.google.com') ||
+                details.url.includes('youtube.com/activate')) {
+                return callback({ cancel: false });
+            }
+            callback({ cancel: true });
+        }
+    );
 }
 
-function createWindow() {
+function applyMode(newMode) {
+    currentMode = newMode;
+    writeState({ mode: currentMode });
+    app.userAgentFallback = getUserAgentForMode(currentMode);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
+    }
+
+    // TV-appen blir oläslig i en smal ruta, så TV-läget tar hela skärmen.
+    if (newMode === 'tv' && mainWindow && !mainWindow.isDestroyed()
+        && !mainWindow.isMaximized() && mainWindow.getBounds().width < 1600) {
+        mainWindow.maximize();
+        console.log('[OmarchyTube] TV-läget vill ha bredden — fönstret maximerat.');
+    }
+}
+
+function stopOnLeave() {
+    // Ingen sidscriptning alls: att navigera bort river sidan, och videon med den.
+}
+
+function goBack() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const history = mainWindow.webContents.navigationHistory;
+    if (history.canGoBack()) history.goBack();
+    else mainWindow.loadURL(getUrlForMode(currentMode));
+}
+
+// Profilfönstret. profile === null betyder startfönstret, som visar väljaren.
+function createWindow(profile) {
+    const customSession = session.fromPartition(profile ? partitionFor(profile.id) : PICKER_PARTITION);
+
+    // Reglerna sätts en gång per partition: att göra det igen på samma session
+    // hade gett dubbla lyssnare.
+    const key = profile ? profile.id : 'picker';
+    if (!configuredPartitions.has(key)) {
+        configureSession(customSession);
+        configuredPartitions.add(key);
+    }
+
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
-    mainWindow = new BrowserWindow({
-        width: 1000,
-        height: 660,
-        minWidth: 720,
-        minHeight: 520,
-        title: 'Vem skall titta? — OmarchyTube',
-        backgroundColor: '#0b0b0d',
+    const state = readState();
+    const win = new BrowserWindow({
+        title: profile ? `OmarchyTube — ${profile.name}` : 'Vem skall titta? — OmarchyTube',
+        width: state.width || 1280,
+        height: state.height || 800,
+        minWidth: 640,
+        minHeight: 480,
+        backgroundColor: '#000000',
         icon: fs.existsSync(iconPath) ? iconPath : undefined,
         autoHideMenuBar: true,
         webPreferences: {
+            session: customSession,
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
-            sandbox: false
+            sandbox: false,
+            plugins: true,
+            webSecurity: true
         }
     });
 
-    mainWindow.loadFile(path.join(__dirname, 'profiles.html'));
-    mainWindow.on('closed', () => { mainWindow = null; });
-    return mainWindow;
+    mainWindow = win;
+    const contentsId = win.webContents.id;
+    if (profile) windowProfiles.set(contentsId, profile.id);
+    win.on('focus', () => { mainWindow = win; });
+    win.on('close', () => {
+        try {
+            const bounds = win.getBounds();
+            writeState({ width: bounds.width, height: bounds.height, mode: currentMode });
+        } catch (err) {
+            // Stängningen får inte falla på att läget inte kunde sparas.
+        }
+    });
+    win.on('closed', () => {
+        windowProfiles.delete(contentsId);
+        if (mainWindow === win) mainWindow = null;
+    });
+
+    if (state.isMaximized !== false) win.maximize();
+    win.webContents.setUserAgent(getUserAgentForMode(currentMode));
+
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+        const isGoogleAuth = url.includes('accounts.google.com') || url.includes('google.com');
+        if (isGoogleAuth) {
+            return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, webPreferences: { session: customSession } } };
+        }
+        if (!isYouTube) {
+            shell.openExternal(url);
+            return { action: 'deny' };
+        }
+        return { action: 'allow' };
+    });
+
+    // Tangenterna rör fönstret och läget — aldrig sidans innehåll.
+    win.webContents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') return;
+
+        // Byt tittare: visar väljaren i den här rutan.
+        if (input.key === 'F3') {
+            showPicker(win);
+            event.preventDefault();
+            return;
+        }
+        if (input.key === 'F2') {
+            switchMode(currentMode === 'tv' ? 'desktop' : 'tv');
+            event.preventDefault();
+            return;
+        }
+        // Koden från TV-skärmen skrivs in i en webbläsare — F4 öppnar rätt sida.
+        if (input.key === 'F4') {
+            shell.openExternal('https://yt.be/activate');
+            event.preventDefault();
+            return;
+        }
+        if (input.key === 'F11') {
+            win.setFullScreen(!win.isFullScreen());
+            event.preventDefault();
+            return;
+        }
+        // Tillbaka, som i en webbläsare.
+        if (input.key === 'Escape' || input.key === 'Backspace' || (input.alt && input.key === 'ArrowLeft')) {
+            goBack();
+            event.preventDefault();
+        }
+        if (input.alt && input.key === 'ArrowRight') {
+            if (win.webContents.navigationHistory.canGoForward()) win.webContents.navigationHistory.goForward();
+            event.preventDefault();
+        }
+    });
+
+    win.on('app-command', (e, cmd) => {
+        if (cmd === 'browser-backward') goBack();
+    });
+
+    if (profile) startWithProfile(win, customSession);
+    else showPicker(win);
+
+    return win;
+}
+
+function showPicker(win) {
+    if (!win || win.isDestroyed()) return win;
+    win.setTitle('Vem skall titta? — OmarchyTube');
+    win.loadFile(pickerPage);
+    return win;
+}
+
+function switchMode(newMode) {
+    applyMode(newMode);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(getUrlForMode(currentMode));
+}
+
+// Inloggad: YouTubes sida i det läge användaren valt. Inte inloggad: TV-läget, för
+// det är den enda väg Google öppnar för en inbäddad webbläsare — där ligger QR-
+// koden och de åtta tecknen (mätt: första valet "Get started", ett Enter ger
+// "Sign in with your phone — Scan QR code or go to yt.be/activate").
+function startWithProfile(win, customSession) {
+    customSession.cookies.get({ domain: '.youtube.com' })
+        .then((cookies) => {
+            const plan = planForSession(cookies, currentMode);
+            if (plan.mode !== currentMode) applyMode(plan.mode);
+            win.loadURL(plan.url);
+            if (plan.autoSignIn) {
+                console.log('[OmarchyTube] Ingen session i den här profilen: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
+                win.setTitle(`OmarchyTube — ${readState().mode === 'tv' ? 'TV' : 'YouTube'}: tryck Enter för QR-koden`);
+            }
+        })
+        .catch((err) => {
+            console.warn('[OmarchyTube] Kunde inte läsa profilens kakor:', err.message);
+            win.loadURL('https://www.youtube.com/tv');
+        });
+}
+
+function openProfile(id) {
+    const profile = findProfile(readProfiles(profilesFile), id);
+    if (!profile) return null;
+
+    const current = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    const currentId = current ? windowProfiles.get(current.webContents.id) : null;
+
+    // Samma profil: rutan har redan rätt session, så det är bara att gå tillbaka.
+    if (current && currentId === profile.id) {
+        startWithProfile(current, session.fromPartition(partitionFor(profile.id)));
+        return current;
+    }
+
+    // Annan profil: partitionen sitter på fönstret och går inte att byta, så det
+    // blir ett nytt fönster i samma storlek och det gamla stängs — ett fönster
+    // kvar på skärmen.
+    const next = createWindow(profile);
+    if (current && !current.isDestroyed()) current.close();
+    return next;
 }
 
 function registerIpc() {
@@ -118,39 +325,32 @@ function registerIpc() {
     ipcMain.handle('omarchy-profiles:remove', (_event, id) => {
         const list = removeProfile(readProfiles(profilesFile), String(id));
         writeProfiles(profilesFile, list);
-        console.log(`[OmarchyTube] Profil borttagen: ${id}`);
         return list;
     });
 
     ipcMain.handle('omarchy-profiles:mode', (_event, next) => {
-        if (next === 'tv' || next === 'desktop') {
-            mode = next;
-            writeState({ mode });
-        }
-        return mode;
+        if (next === 'tv' || next === 'desktop') applyMode(next);
+        return currentMode;
     });
 
     ipcMain.handle('omarchy-profiles:pick', (_event, id) => {
         const profile = findProfile(readProfiles(profilesFile), String(id));
         if (!profile) return { ok: false, message: 'Profilen finns inte längre.' };
-
-        const result = launch(profile);
-        if (!result.ok) return result; // rutan står kvar med felet, inget stängs
-
-        setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
-            app.quit();
-        }, CLOSE_DELAY_MS);
-        return result;
+        openProfile(String(id));
+        return { ok: true, message: `Öppnar ${profile.name} …` };
     });
+
+    ipcMain.handle('omarchy-profiles:current', (event) => windowProfiles.get(event.sender.id) || null);
 }
 
 app.whenReady().then(() => {
     registerIpc();
-    createWindow();
+
+    // Första skärmen är frågan: vem skall titta?
+    createWindow(null);
 
     app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        if (BrowserWindow.getAllWindows().length === 0) createWindow(null);
     });
 });
 

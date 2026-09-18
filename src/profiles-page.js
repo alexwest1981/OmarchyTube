@@ -83,7 +83,7 @@
             openForm();
             return;
         }
-        say(`Öppnar ${profile.name} …`);
+        say(`Öppnar ${profile.name} i appen …`);
         bridge.pick(profile.id).then((result) => {
             if (result && result.message) say(result.message);
             // Misslyckades starten står rutan kvar med orsaken i stället för att
@@ -151,6 +151,11 @@
             choose();
             event.preventDefault();
         }
+        if (event.key === 'Escape') {
+            // Rutan kan redan visa en profil (F3 hit); Esc är vägen tillbaka.
+            bridge.current().then((id) => { if (id) bridge.pick(id); });
+            event.preventDefault();
+        }
         if (event.key.toLowerCase() === 'n') {
             openForm();
             event.preventDefault();
@@ -180,7 +185,7 @@
         index = 0;
         render();
         say(profiles.length
-            ? 'Välj profil — Enter öppnar den i webbläsaren.'
+            ? 'Välj profil — Enter öppnar den här rutan på den profilens YouTube.'
             : 'Ingen profil än: N eller klick lägger till den första.');
     });
 })();

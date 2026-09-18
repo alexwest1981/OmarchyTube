@@ -1,71 +1,68 @@
 # OmarchyTube
 
-Frågar **vem som skall titta** och öppnar YouTube för den personen — i ett
-webbläsarfönster med egen Google-session.
-
-Det är hela appen. Den frågar, den öppnar, den stänger sig.
-
-## Varför den är så liten
-
-Första versionen försökte vara webbläsaren: eget videorutnät mot YouTubes
-interna API, egen CSS injicerad i YouTubes sidor, ett "TV-läge" med förfalskad
-SmartTV-agent och egen inloggning. Varje del av det slogs mot något vi inte kan
-vinna:
-
-* **Inloggningen.** Google vägrar lösenordsformuläret inuti en inbäddad
-  webbläsare (`Couldn't sign you in — This browser or app may not be secure`).
-  Mätt, två gånger. I en riktig webbläsare fungerar det.
-* **TV-läget.** YouTubes TV-app räknar sin textskala ur fönsterbredden, i
-  kvadrat: ett fönster på 941 px gav rotfont 5,88 px mot 24 px vid 1920 — en
-  fjärdedels bild, oläsbar. YouTubes design, inte en bugg vi kan laga.
-* **Appens skal.** Våra injicerade geometriregler (`#container` tvingad till
-  100vw/100vh) träffade YouTubes skrivbordssida, som har **sju** element med det
-  id:t — masthead, spelare, spellista — och la hela sidan i ett band högst upp
-  med resten bortklippt.
-* **Renderingen.** Electron på Wayland gjorde `setZoomFactor(0.49)` till ett
-  `devicePixelRatio` på 0,49 i stället för en sidzoom: layouten sa 1920 CSS-px
-  medan ytan målades i fönstrets storlek.
-
-Allt det där är redan löst i en webbläsare, av folk som gör det till yrke. Kvar
-är det som faktiskt var vårt: frågan, och att hålla sessionerna åtskilda. Varje
-profil får sin egen `--user-data-dir`, så att logga in som någon annan aldrig
-rör ditt eget flöde, din historik eller dina prenumerationer.
+Frågar **vem som skall titta** och öppnar sedan YouTube i appen för den
+personen — ett fönster, en Google-session per profil.
 
 ## Att använda den
 
-1. Starta **OmarchyTube** — profilväljaren är det enda fönstret.
-2. <kbd>↵</kbd> på en profil öppnar den profilens webbläsarfönster på
-   <kbd>youtube.com</kbd>. Startaren stänger sig själv så snart webbläsaren är uppe.
-3. Logga in en gång per profil, i det fönstret. Google behandlar det som en
-   vanlig webbläsare, eftersom det är en.
-4. <kbd>N</kbd> lägger till en profil. <kbd>F2</kbd> växlar mellan skrivbords-
-   och TV-läge (TV öppnar `youtube.com/tv` — för en stor skärm).
-   <kbd>Delete</kbd> två gånger tar bort en profil; webbläsarkatalogen ligger
-   kvar om du vill ta bort kontot också.
+1. Starta **OmarchyTube**: profilväljaren är fönstret.
+2. <kbd>↵</kbd> på en profil öppnar YouTube i det fönstret, i den profilens egen
+   session.
+3. Första gången på en profil visar YouTubes TV-inloggning en **QR-kod och en
+   åttateckenskod** (första valet på den skärmen är *Get started* — tryck
+   <kbd>↵</kbd> om du inte är där). Skanna med mobilen, eller tryck <kbd>F4</kbd>
+   för att öppna `yt.be/activate` i en webbläsare och skriva koden där. Kontot
+   hamnar i profilen och stannar där.
+4. <kbd>F3</kbd> tar tillbaka väljaren i samma fönster, <kbd>Esc</kbd> går tillbaka
+   till profilen, <kbd>F2</kbd> växlar skrivbords-/TV-läge, <kbd>F11</kbd> är
+   fullskärm. <kbd>N</kbd> lägger till en profil, <kbd>Delete</kbd> två gånger tar
+   bort en.
 
 ```sh
 omarchy-tube            # väljaren
-omarchy-tube --tv       # starta i TV-läge
-omarchy-tube --desktop  # starta i skrivbordsläge
-OMARCHYTUBE_BROWSER=chromium omarchy-tube   # annan webbläsare
+omarchy-tube --tv       # starta på youtube.com/tv
+omarchy-tube --desktop  # starta på youtube.com
 ```
 
-## Vad den behöver
+## Varför inloggningen går via TV-skärmen
 
-* **Electron** (väljarfönstret) — `npm install`.
-* **En Chromium-webbläsare i PATH** — `brave` som standard, byt med
-  `OMARCHYTUBE_BROWSER`.
+Den uppenbara vägen — YouTubes vanliga lösenordsformulär — är stängd för varje
+inbäddad webbläsare. Mätt två gånger, i en riktig körning:
 
-Webbläsaren är där YouTube bor; startaren laddar aldrig en YouTubesida själv och
-injicerar ingenting någonstans.
+> **Couldn't sign you in.** This browser or app may not be secure.
+
+TV-klientens device-flöde är den väg Google öppnar, och den lägger kontot i
+appens egen session: skärmen visar en QR-kod och en åttateckenskod, du bekräftar
+på mobilen eller på `yt.be/activate`, och appen är inloggad. Det går inte att
+automatisera bort — koden måste från appens skärm till en enhet Google litar på.
+
+## Vad appen inte gör
+
+Den rör inte YouTubes sidor. Ingen CSS, ingen JavaScript, ingen zoom, ingen
+skalning. Regeln kommer ur mätningar, inte ur tycke:
+
+* Injicerad geometri (`#container` tvingad till `100vw`/`100vh`, `overflow: hidden`
+  på `html, body`) träffade YouTubes skrivbordssida, som har **sju** element med
+  det id:t — masthead, spelare, spellista, kanalnamn — och la hela sidan i ett band
+  högst upp med resten bortklippt.
+* `setZoomFactor(0.49)` på Wayland blev ett `devicePixelRatio` på 0,49 i stället
+  för en sidzoom: layouten sa 1920 CSS-px medan ytan målades i fönstrets storlek,
+  så bilden hamnade i en fjärdedel av rutan.
+* TV-appen räknar sin egen textskala ur fönsterbredden, i kvadrat: 941 px gav
+  rotfont 5,88 px mot 24 px vid 1920. Det är YouTubes design, så TV-läget maximerar
+  fönstret i stället för att slåss mot den.
+
+Det appen äger: fönstret, frågan, sessionen per profil, webbläsaridentiteten varje
+läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 
 ## Filer
 
 | Fil | Vad den är |
 |---|---|
-| `src/main.js` | väljarfönstret, IPC:n och starten — inget annat |
+| `src/main.js` | fönstret, tangenterna, sessionsreglerna, starten |
 | `src/profiles.js` | profillistan (`userData/profiles.json`), ren och provad |
-| `src/browser-launch.js` | webbläsarkommandot per profil, rent och provat |
+| `src/user-agent.js` | TV- och skrivbordsidentiteterna, rena och provade |
+| `src/sign-in.js` | inloggad ⇒ lägets sida, utloggad ⇒ TV-inloggningen, ren och provad |
 | `src/profiles.html/.css/-page.js` | skärmen "Vem skall titta?" |
 | `src/preload.js` | rendererns hela yta: fem profilkanaler |
 
@@ -75,8 +72,7 @@ injicerar ingenting någonstans.
 npm test
 ```
 
-23 prov: profilreglerna (id:n måste tåla att bli katalognamn, två profiler får
-aldrig dela katalog), webbläsarkommandot (varje profil får sin egen katalog,
-adressen följer läget), IPC-kanalerna (varje `invoke` har en `handle`), och ett
-arkitekturprov som fäller om det rivna lagret — en injektor, en inbäddad
-YouTubesida, en förfalskad webbläsaridentitet — skulle komma tillbaka.
+30 prov: profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
+aldrig dela en), webbläsaridentiteten per läge, inloggningsbeslutet, IPC-kanalerna,
+och ett arkitekturprov som fäller om en injektor, ett zoom-anrop eller ett
+sidskript kommer tillbaka.

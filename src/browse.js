@@ -79,12 +79,25 @@ function play(index) {
     if (item) window.omarchyBridge.play(item.videoId);
 }
 
+// Mätt 2026-09-18: rutnätet stod på "Searching ..." och ingen — varken Alex
+// eller jag — kunde se om YouTube svarade, svarade tomt eller inte svarade alls.
+// En förfrågan som aldrig kommer tillbaka får säga det själv i stället.
+const TIMEOUT_MS = 20000;
+
+function withTimeout(promise) {
+    return Promise.race([
+        promise,
+        new Promise((resolve, reject) => setTimeout(
+            () => reject(new Error(`no answer within ${TIMEOUT_MS / 1000} s`)), TIMEOUT_MS))
+    ]);
+}
+
 async function load(kind, text) {
     status.textContent = kind === 'search' ? `Searching “${text}”…` : 'Loading…';
     try {
-        const items = kind === 'search'
-            ? await window.omarchyBridge.browseSearch(text)
-            : await window.omarchyBridge.browseHome();
+        const items = await withTimeout(
+            kind === 'search' ? window.omarchyBridge.browseSearch(text) : window.omarchyBridge.browseHome()
+        );
         state.items = items;
         state.index = 0;
         render();

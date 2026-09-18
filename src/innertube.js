@@ -36,7 +36,22 @@ async function post(endpoint, body, partition = PARTITION) {
 
 // partition kommer från fönstret som frågade (main.js håller reda på vilken
 // profil varje webContents tillhör). Utan argument blir det appens egen.
-const home = (partition) => post('browse', { browseId: 'FEwhat_to_watch' }, partition).then(extractItems);
-const search = (query, partition) => post('search', { query }, partition).then(extractItems);
+// Loggar varje anrop. Utan raden ser en tom ruta likadan ut oavsett om YouTube
+// svarade tomt eller inte svarade alls — mätt 2026-09-18, när rutnätet stod på
+// "Searching ..." utan att någon kunde se varför.
+const home = (partition) => run('home', 'browse', { browseId: 'FEwhat_to_watch' }, partition);
+const search = (query, partition) => run(`search "${query}"`, 'search', { query }, partition);
+
+async function run(what, endpoint, body, partition) {
+    try {
+        const items = await post(endpoint, body, partition);
+        const result = extractItems(items);
+        console.log(`[OmarchyTube] InnerTube ${what}: ${result.length} träffar (${partition || PARTITION})`);
+        return result;
+    } catch (err) {
+        console.error(`[OmarchyTube] InnerTube ${what} misslyckades (${partition || PARTITION}):`, err.message);
+        throw err;
+    }
+}
 
 module.exports = { home, search, API_KEY };

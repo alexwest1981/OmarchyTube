@@ -461,8 +461,10 @@
     applyLeanbackDensity();
 
     // --- Module 7: Key Hints on First Run ---
-    // En TV-app har inga menyer att upptäcka tangenterna i. Visas en gång, och
-    // försvinner vid första tangenttryck eller efter tolv sekunder.
+    // En TV-app har inga menyer att upptäcka tangenterna i. Tipset visas en gång,
+    // och måste återinsättas med en klocka: TV-appen byter ut bodyns innehåll när
+    // den ritar om, och en nod som bara läggs in en gång försvinner då tyst
+    // (samma skäl som tillbaka-knappen har sin egen sekundklocka).
     const KEY_HINTS = [
         ['\u2190 \u2192 \u2191 \u2193', 'Move'],
         ['Enter', 'Select'],
@@ -470,16 +472,15 @@
         ['F2', 'Desktop mode'],
         ['F11', 'Fullscreen'],
     ];
+    const HINTS_MS = 12000;
+    let hintsDeadline = 0;
 
-    function showKeyHints() {
-        if (localStorage.getItem('omarchy-hints-shown') === '1') return;
-        if (document.getElementById('omarchy-key-hints')) return;
-        if (!document.body) return;
+    function buildKeyHints() {
         const box = document.createElement('div');
         box.id = 'omarchy-key-hints';
         // Element för element: YouTubes Trusted Types-CSP kastar på innerHTML
-        // ("This document requires 'TrustedHTML' assignment"), och tipset
-        // uteblev därför tyst i den byggda appen.
+        // ("This document requires 'TrustedHTML' assignment" — mätt i den
+        // byggda appen), och tipset uteblev därför tyst.
         for (const [keys, label] of KEY_HINTS) {
             const row = document.createElement('div');
             row.className = 'omarchy-hint-row';
@@ -490,20 +491,33 @@
             row.append(kbd, span);
             box.append(row);
         }
-        document.body.appendChild(box);
-        requestAnimationFrame(() => box.classList.add('show'));
-
-        const hide = () => {
-            box.classList.remove('show');
-            localStorage.setItem('omarchy-hints-shown', '1');
-            window.removeEventListener('keydown', hide);
-            setTimeout(() => box.remove(), 400);
-        };
-        window.addEventListener('keydown', hide);
-        setTimeout(hide, 12000);
+        return box;
     }
 
-    setTimeout(showKeyHints, 1500);
+    function ensureKeyHints() {
+        if (!hintsDeadline || Date.now() > hintsDeadline) return;
+        if (!document.body || document.getElementById('omarchy-key-hints')) return;
+        const box = buildKeyHints();
+        document.body.appendChild(box);
+        requestAnimationFrame(() => box.classList.add('show'));
+    }
+
+    function hideKeyHints() {
+        hintsDeadline = 0;
+        localStorage.setItem('omarchy-hints-shown', '1');
+        window.removeEventListener('keydown', hideKeyHints);
+        const box = document.getElementById('omarchy-key-hints');
+        if (!box) return;
+        box.classList.remove('show');
+        setTimeout(() => box.remove(), 400);
+    }
+
+    if (localStorage.getItem('omarchy-hints-shown') !== '1') {
+        hintsDeadline = Date.now() + HINTS_MS;
+        window.addEventListener('keydown', hideKeyHints);
+        setTimeout(ensureKeyHints, 1500);
+        setInterval(ensureKeyHints, 1000);
+    }
 
     // In-page keyboard handler for Escape, Backspace, and 'q'
     window.addEventListener('keydown', (e) => {

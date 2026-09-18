@@ -1,6 +1,7 @@
 const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const innertube = require('./innertube');
 
 // Hardware acceleration flags for Hyprland / Linux.
 //
@@ -72,6 +73,28 @@ function getUrlForMode(mode) {
     return mode === 'tv' ? 'https://www.youtube.com/tv' : 'https://www.youtube.com';
 }
 
+// Our own grid is the app's home. YouTube's TV view is one key away (F1) and is
+// where playback happens, so everything the injector does — ad skipping,
+// SponsorBlock, dislike counts, the back button — still applies.
+const BROWSE_PAGE = path.join(__dirname, 'browse.html');
+let onBrowsePage = false;
+// Set when a video is started from the grid, so leaving that video comes back
+// here instead of to YouTube's own home — and cleared whenever the user walks
+// off to YouTube themselves (F1, F2, or any navigation to youtube.com).
+let returnToGrid = false;
+
+function loadBrowse() {
+    if (!mainWindow) return;
+    onBrowsePage = true;
+    mainWindow.loadFile(BROWSE_PAGE);
+}
+
+function watchUrlForMode(mode, videoId) {
+    return mode === 'tv'
+        ? `https://www.youtube.com/tv#/watch?v=${videoId}`
+        : `https://www.youtube.com/watch?v=${videoId}`;
+}
+
 app.userAgentFallback = getUserAgentForMode(currentMode);
 
 function configureSession(targetSession) {
@@ -114,13 +137,19 @@ function configureSession(targetSession) {
 }
 
 function switchMode(newMode) {
-    if (newMode === currentMode) return;
+    if (newMode === currentMode) {
+        // Same mode: F2 then means "back to the grid", so the key never strands
+        // the user on a page with no way home.
+        if (!onBrowsePage) loadBrowse();
+        return;
+    }
     currentMode = newMode;
     saveWindowState({ mode: currentMode });
     app.userAgentFallback = getUserAgentForMode(currentMode);
     mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
-    mainWindow.loadURL(getUrlForMode(currentMode));
-    console.log(`[OmarchyTube] Växlade läge till: ${currentMode}`);
+    onBrowsePage = false;
+    loadBrowse();
+    console.log(`[OmarchyTube] Switched mode to: ${currentMode}`);
 }
 
 function createWindow() {
@@ -179,9 +208,12 @@ function createWindow() {
         }
     };
 
-    mainWindow.webContents.on('dom-ready', injectResources);
+    mainWindow.webContents.on('dom-ready', () => {
+        if (!mainWindow.webContents.getURL().startsWith('file://')) onBrowsePage = false;
+        injectResources();
+    });
 
-    mainWindow.loadURL(getUrlForMode(currentMode));
+    loadBrowse();
 
     // Handle external links
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -207,6 +239,18 @@ function createWindow() {
 
     // Global in-window keyboard shortcuts
     mainWindow.webContents.on('before-input-event', (event, input) => {
+        // Our grid / YouTube's own view: F1
+        if (input.key === 'F1' && input.type === 'keyDown') {
+            if (onBrowsePage) {
+                onBrowsePage = false;
+                returnToGrid = false;
+                mainWindow.loadURL(getUrlForMode(currentMode));
+            } else {
+                loadBrowse();
+            }
+            event.preventDefault();
+        }
+
         // Fullscreen toggle: F11
         if (input.key === 'F11' && input.type === 'keyDown') {
             mainWindow.setFullScreen(!mainWindow.isFullScreen());
@@ -236,7 +280,7 @@ function createWindow() {
 
         // Home: Alt+Home
         if (input.alt && input.key === 'Home' && input.type === 'keyDown') {
-            mainWindow.loadURL(getUrlForMode(currentMode));
+            loadBrowse();
             event.preventDefault();
         }
 
@@ -286,9 +330,12 @@ function createWindow() {
 
         if (mainWindow.webContents.canGoBack()) {
             mainWindow.webContents.goBack();
+        } else if (returnToGrid) {
+            loadBrowse();
         } else {
             mainWindow.loadURL(getUrlForMode(currentMode));
         }
+        returnToGrid = false;
 
         // Fallback: If still on watch page after 350ms, navigate to root URL
         setTimeout(() => {
@@ -302,7 +349,7 @@ function createWindow() {
                     })()
                 `).then(isWatching => {
                     if (isWatching) {
-                        mainWindow.loadURL(getUrlForMode(currentMode));
+                        loadBrowse();
                     }
                 }).catch(() => {});
             }
@@ -311,6 +358,16 @@ function createWindow() {
 
     ipcMain.on('omarchy-exit-video', () => {
         handleExitVideo();
+    });
+
+    // The grid's two ways to YouTube's data, and its one way to play.
+    ipcMain.handle('omarchy-browse-home', () => innertube.home());
+    ipcMain.handle('omarchy-browse-search', (_event, query) => innertube.search(String(query || '')));
+    ipcMain.on('omarchy-play', (_event, videoId) => {
+        if (!mainWindow || !/^[\w-]{11}$/.test(String(videoId))) return;
+        onBrowsePage = false;
+        returnToGrid = true;
+        mainWindow.loadURL(watchUrlForMode(currentMode, videoId));
     });
 
     // Handle mouse 4 (Back) button

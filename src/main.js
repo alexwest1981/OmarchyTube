@@ -1,9 +1,11 @@
 const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const innertube = require('./innertube');
 const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
 const { planForSession } = require('./sign-in');
+const { browserCommand } = require('./browser-launch');
 
 // Hardware acceleration flags for Hyprland / Linux.
 //
@@ -54,6 +56,36 @@ const pickerPage = path.join(__dirname, 'profiles.html');
 // Startfönstret (väljaren) behöver ingen session alls — men ett fönster måste ha
 // en, och den här rör inget konto.
 const PICKER_PARTITION = 'persist:omarchy-picker';
+
+// Profilen öppnas i webbläsaren, inte i appens eget fönster.
+//
+// Mätt 2026-09-18, efter en hel kväll av fel: Google vägrar lösenordsinloggning i
+// en inbäddad webbläsare ("Couldn't sign you in — This browser or app may not be
+// secure"), YouTubes TV-app räknar sin textskala ur fönsterbredden och blir
+// oläslig i en tilad ruta (941 px gav rotfont 5,88 px mot 24 px vid 1920), och
+// Electronns zoom/kompositor beter sig inte som en vanlig webbläsares. I Brave
+// är allt det där någon annans problem: inloggningen fungerar, videon avkodas i
+// hårdvara och rutan är en ruta. Varje profil får sin egen --user-data-dir, alltså
+// sin egen Google-session och sina egna flöden.
+//
+// --in-app kör den gamla vägen (YouTubes sidor i appens eget fönster) för den som
+// vill jämföra; allt annat är kvar och oförändrat.
+const BROWSER = process.env.OMARCHYTUBE_BROWSER || 'brave';
+const RUN_IN_APP = process.argv.includes('--in-app');
+
+function openProfileInBrowser(profile) {
+    const command = browserCommand(app.getPath('userData'), profile, currentMode, BROWSER);
+    fs.mkdirSync(command.dir, { recursive: true });
+
+    try {
+        const child = spawn(command.command, command.args, { detached: true, stdio: 'ignore' });
+        child.unref();
+        console.log(`[OmarchyTube] ${profile.name} öppnas i ${command.command} (${currentMode}-läge, ${command.dir})`);
+    } catch (err) {
+        console.error(`[OmarchyTube] Kunde inte starta ${command.command}:`, err.message);
+    }
+    return null;
+}
 const stateFile = path.join(app.getPath('userData'), 'window-state.json');
 
 function loadWindowState() {
@@ -559,6 +591,8 @@ function startWithProfile(win, profile, profileSession) {
 function openProfile(id) {
     const profile = findProfile(readProfiles(profilesFile), id);
     if (!profile) return null;
+
+    if (!RUN_IN_APP) return openProfileInBrowser(profile);
 
     const current = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
     const currentId = current ? windowProfiles.get(current.webContents.id) : null;

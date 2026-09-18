@@ -21,11 +21,12 @@ const { planForSession } = require('./sign-in');
 // and no error. A leanback player that answers a keypress with silence is
 // broken, so the policy is lifted.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-// Mätt i Alex terminal 2026-09-18: "'--ozone-platform=wayland' is not compatible
-// with Vulkan" — trots att raden nedan stod här. 'disable-vulkan' är ingen
-// riktig Chromium-flagga (den gör ingenting), så Vulkan var fortfarande på.
-// Rätt väg är att stänga av featuren, som Chromiums egen feltext föreslår.
-app.commandLine.appendSwitch('disable-features', 'Vulkan');
+// Om Chromiums Vulkan-flaggor, mätt 2026-09-18: 'disable-vulkan' är ingen riktig
+// flagga (varningen i terminalen stod kvar), och att stänga av featuren Vulkan
+// gjorde saken värre — app.getGPUFeatureStatus() svarade då
+// rasterization=disabled_software, video_decode=disabled_software, alltså allt i
+// programvara. Varningen "not compatible with Vulkan" är kosmetisk; den får stå.
+// Ingen Vulkan-flagga här.
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL,VaapiVideoDecoder');
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 
@@ -153,6 +154,15 @@ function configureSession(targetSession) {
 
 function applyMode(newMode) {
     currentMode = newMode;
+
+    // YouTubes TV-app räknar sin textskala ur fönstrets bredd (mätt: 941 px gav
+    // rotfont 5,88 px mot 24 px vid 1920). En TV-yta hör till en bred ruta, så
+    // TV-läget tar hela skärmen i stället för att appen försöker krympa YouTube.
+    if (newMode === 'tv' && mainWindow && !mainWindow.isDestroyed()
+        && !mainWindow.isMaximized() && mainWindow.getBounds().width < 1600) {
+        mainWindow.maximize();
+        console.log('[OmarchyTube] TV-läget vill ha bredden — fönstret maximerat.');
+    }
     saveWindowState({ mode: currentMode });
     app.userAgentFallback = getUserAgentForMode(currentMode);
     if (mainWindow) mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
@@ -398,36 +408,17 @@ function createWindow(profile) {
     });
 }
 
-// YouTubes TV-app räknar sin egen skala ur fönstrets bredd — och skalan går med
-// kvadraten på bredden. Mätt hos Alex 2026-09-18: fönstret 941x1030 gav rotfonten
-// 5,88 px mot 24 px vid 1920 bredd. Det är hela "bara 1/4 av rutan synlig": appen
-// tror att den står på en 1920 bred TV och krymper allt efter hur långt ifrån den
-// är. Vi låter den tro det — zoomfaktorn ställs så att sidan alltid lägger ut sig
-// för 1920 CSS-pixlar och skalas till fönstret i stället. Desktop-läget
-// (youtube.com utan /tv) är en vanlig webbsida och skalas inte alls.
-const TV_LAYOUT_WIDTH = 1920;
+// Sidan lämnas i fred: ingen zoom, ingen skalning. Mätt 2026-09-18: ett försök
+// att skala YouTubes TV-app till fönstret med setZoomFactor(0.49) gav
+// devicePixelRatio 0,49 — layouten blev 1920 CSS-px men ytan målades i fönstrets
+// storlek, alltså innehållet i en fjärdedel uppe till vänster. Det var den
+// fjärdedelen Alex såg, och den var min. Att bråka med YouTubes egen skalning är
+// inte värt det; raden nedan finns bara för att kunna läsa vad sidan fick.
 
 function fitView(win) {
     if (!win || win.isDestroyed()) return;
-
     const tvPage = win.webContents.getURL().includes('youtube.com/tv');
-    let factor = 1;
-    if (tvPage) {
-        const width = win.getBounds().width || TV_LAYOUT_WIDTH;
-        factor = Math.min(Math.max(width / TV_LAYOUT_WIDTH, 0.35), 2);
-    }
-    try {
-        // Bara setZoomFactor: setZoomLevel(0) betyder 100 % och nollställde
-        // faktorn i nästa andetag. Mätt i Alex logg 21:50 — raden sa zoom 0,49
-        // medan sidan fortfarande var 941 CSS-px bred.
-        win.webContents.setZoomFactor(factor);
-    } catch (err) {
-        console.warn('[OmarchyTube] Kunde inte sätta zoom:', err.message);
-        return;
-    }
 
-    // Läs av efteråt: appen räknar om sin skala när vyn ändras, och raden finns
-    // för att kunna läsas i stället för att gissas.
     setTimeout(() => {
         if (win.isDestroyed()) return;
         win.webContents.executeJavaScript(`(() => ({
@@ -436,12 +427,15 @@ function fitView(win) {
             rootFont: getComputedStyle(document.documentElement).fontSize
         }))()`).then((seen) => {
             const bounds = win.getBounds();
-            const applied = win.webContents.getZoomFactor();
-            const expected = Math.round(bounds.width / (applied || 1));
+            const zoomed = Math.abs(win.webContents.getZoomFactor() - 1) > 0.01;
             console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | sidan ${seen.view[0]}x${seen.view[1]}`
-                + ` (väntat ${expected} brett) | zoom satt ${factor.toFixed(2)} / gäller ${applied.toFixed(2)}`
-                + ` | dpr ${seen.dpr} | visualViewport ${seen.visual} | rotfont ${seen.rootFont}`
-                + (tvPage ? ' | TV-läge' : ''));
+                + ` | zoom ${win.webContents.getZoomFactor().toFixed(2)} | dpr ${seen.dpr}`
+                + ` | visualViewport ${seen.visual} | rotfont ${seen.rootFont}`
+                + (tvPage ? ' | TV-läge' : '')
+                // Två tillstånd som gav en fjärdedelsruta: zoom utanför 1 och ett
+                // devicePixelRatio som inte är 1. De skall skrika, inte tigas.
+                + (zoomed ? '  <-- zoom är inte 1' : '')
+                + (Math.abs(seen.dpr - 1) > 0.01 ? '  <-- dpr är inte 1, sidan skalas fel' : ''));
         }).catch(() => {});
     }, 900);
 }

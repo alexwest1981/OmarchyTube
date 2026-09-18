@@ -85,6 +85,10 @@ async function load(kind, text) {
         state.items = items;
         state.index = 0;
         render();
+        // The search field keeps the caret until we take it away; a leanback
+        // grid is useless until the arrows reach it (measured: the selection
+        // never moved because the input still had focus).
+        grid.focus();
         if (!items.length) {
             status.textContent = kind === 'search'
                 ? 'No results'

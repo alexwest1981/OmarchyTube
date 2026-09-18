@@ -290,7 +290,12 @@ function createWindow() {
             event.preventDefault();
         }
 
-        // Exit video / Back navigation: Escape, Backspace, or Alt+Left
+        // Exit video / Back navigation: Escape, Backspace, or Alt+Left.
+        // On the grid those keys belong to the renderer (Escape there means
+        // "back to the home feed"); without this guard Escape inside the grid
+        // threw the user out to YouTube's own view instead.
+        if (onBrowsePage) return;
+
         if (((input.key === 'Escape' || input.key === 'Backspace') && input.type === 'keyDown') ||
             (input.alt && input.key === 'ArrowLeft' && input.type === 'keyDown')) {
             mainWindow.webContents.executeJavaScript(`

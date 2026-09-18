@@ -1,0 +1,18 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Proven läser bara filer i repot (package.json, LICENSE, src/) och
+      # behöver varken electron eller node_modules, så ingen installation görs.
+      - name: Tests
+        run: npm test

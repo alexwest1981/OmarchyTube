@@ -2,8 +2,16 @@ const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// Wayland & Hardware Acceleration flags for Hyprland / Linux
-app.commandLine.appendSwitch('ozone-platform', 'wayland');
+// Hardware acceleration flags for Hyprland / Linux.
+//
+// There is deliberately no `appendSwitch('ozone-platform', 'wayland')` here:
+// Chromium picks its ozone platform while the browser process starts, which is
+// before this script runs, so the switch was never in time — measured in a
+// Wayland-only session (cage, no X server): the app still came up as
+// ozone_platform_x11 and exited with "Missing X server or $DISPLAY". The
+// platform is set on the command line instead: `npm start` passes
+// --ozone-platform=wayland, and the flatpak entry point passes it when
+// WAYLAND_DISPLAY is set.
 app.commandLine.appendSwitch('disable-vulkan');
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL,VaapiVideoDecoder');
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');

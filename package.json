@@ -5,7 +5,8 @@
   "description": "OmarchyTube - a leanback YouTube client for Hyprland/Omarchy desktops",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron src/main.js --ozone-platform-hint=auto"
+    "start": "electron src/main.js --ozone-platform-hint=auto",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "",

@@ -1,33 +1,33 @@
 // OmarchyTube — vem skall titta, och sedan YouTube i den här rutan.
 //
-// Efter rivningen 2026-09-18 är regeln: appen äger fönstret, frågan och
-// sessionerna. Den rör inte YouTubes sidor. Ingen injicerad CSS, ingen injicerad
-// JS, ingen zoom, ingen egen skalning — varje gång vi la oss i deras layout blev
-// det sämre:
+// Regeln efter rivningen 2026-09-18: appen äger fönstret, frågan, sessionen och
+// vyn. Den rör inte YouTubes sidor — ingen injicerad CSS, ingen injicerad JS.
 //
-//   * våra geometriregler (tvinga #container till 100vw/100vh) träffade
+//   * injicerad geometri (tvinga #container till 100vw/100vh) träffade
 //     skrivbordssidan, som har SJU element med det id:t, och la hela sidan i ett
 //     band högst upp med resten bortklippt;
-//   * setZoomFactor(0.49) blev dpr 0,49 på Wayland: layouten sa 1920 CSS-px
-//     medan ytan målades i fönstrets storlek — innehåll i en fjärdedels ruta;
-//   * en funktion som deklareras inuti en annan (handleExitVideo i registerIpc)
+//   * en funktion som deklarerades inuti en annan (handleExitVideo i registerIpc)
 //     gjorde Esc stendöd utan ett ljud.
 //
-// Fönstret är fullskärm (en riktig begäran till kompositorn — maximize() förlorar
-// mot Hyprlands tilning: mätt blev rutan 941 px bred, och YouTubes 10-fotslayout
-// visar då två gigantiska brickor i stället för en läsbar rad).
+// Vyn får vi däremot styra, och det är två saker:
 //
-// Det vi gör är fönstret, sessionen, webbläsaridentiteten och läget. Inloggningen
-// går via Googles TV-flöde (QR-koden) eftersom Google vägrar lösenordsformuläret
-// i en inbäddad webbläsare — mätt: "Couldn't sign you in — This browser or app
-// may not be secure".
+//   * FULLSKÄRM — en riktig begäran till kompositorn. maximize() förlorar mot
+//     Hyprlands tilning: mätt blev rutan 941 px bred, och YouTubes 10-fotslayout
+//     visar då två gigantiska brickor i stället för en läsbar rad.
+//   * ZOOM (zoom.js) — webbläsarens egen vy-inställning, samma sak som Ctrl+- hos
+//     Google. Fler kort per rad i skrivbordslayouten. Mätt två gånger: den biter
+//     inte i TV-läget, vars 10-fotslayout är byggd i rem mot fönsterbredden.
+//
+// Inloggningen går via Googles TV-flöde (QR-koden) eftersom Google vägrar
+// lösenordsformuläret i en inbäddad webbläsare — mätt: "Couldn't sign you in —
+// This browser or app may not be secure".
 const { app, BrowserWindow, screen, session, shell, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
 const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
 const { getUserAgentForMode } = require('./user-agent');
-const { planForSession } = require('./sign-in');
+const { TV_PAGE, isGoogleSignIn, isSignedIn, pageForMode, planForSession, signInPlan } = require('./sign-in');
 const { DEFAULT: DEFAULT_ZOOM, clampZoom, nextZoom } = require('./zoom');
 
 // Spelaren startar när sidan byts (användaren tryckte Enter i TV-appen och
@@ -84,8 +84,6 @@ let currentMode = argv.includes('--tv') ? 'tv'
 // en konstant. Standard 0,80 ger 2400 CSS-px i en 1920-ruta ⇒ 5–6 kort i bredd i
 // stället för 4.
 let currentZoom = clampZoom(readState().zoom ?? DEFAULT_ZOOM);
-
-const getUrlForMode = (mode) => (mode === 'tv' ? 'https://www.youtube.com/tv' : 'https://www.youtube.com');
 
 function configureSession(targetSession) {
     targetSession.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -165,7 +163,7 @@ function goBack() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const history = mainWindow.webContents.navigationHistory;
     if (history.canGoBack()) history.goBack();
-    else mainWindow.loadURL(getUrlForMode(currentMode));
+    else mainWindow.loadURL(pageForMode(currentMode));
 }
 
 // Profilfönstret. profile === null betyder startfönstret, som visar väljaren.
@@ -231,9 +229,11 @@ function createWindow(profile) {
 
     win.webContents.setWindowOpenHandler(({ url }) => {
         const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-        const isGoogleAuth = url.includes('accounts.google.com') || url.includes('google.com');
-        if (isGoogleAuth) {
-            return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, webPreferences: { session: customSession } } };
+        if (isGoogleSignIn(url)) {
+            // Popup-vägen till Googles lösenordsformulär: stäng den och öppna dörren
+            // Google faktiskt öppnar i stället för att visa det blockerade formuläret.
+            routeToSignInDoor(win);
+            return { action: 'deny' };
         }
         if (!isYouTube) {
             shell.openExternal(url);
@@ -245,6 +245,10 @@ function createWindow(profile) {
     // Tangenterna rör fönstret och läget — aldrig sidans innehåll.
     win.webContents.on('before-input-event', (event, input) => {
         if (input.type !== 'keyDown') return;
+
+        // Väljarsidan sköter Enter, Esc, N och Delete själv (profiles-page.js).
+        // Utan den här grinden gjorde Esc både sidans jobb och vårt eget.
+        if (win.webContents.getURL().includes('profiles.html')) return;
 
         // Byt tittare: visar väljaren i den här rutan.
         if (input.key === 'F3') {
@@ -263,18 +267,20 @@ function createWindow(profile) {
             event.preventDefault();
             return;
         }
-        // Fler eller färre kort: samma tangentbord som i en webbläsare.
-        if (input.control && (input.key === '-' || input.key === '_')) {
+        // Fler eller färre kort: samma tangentbord som i en webbläsare, och samma
+        // tangenter på numpaden (ett svenskt tangentbord skickar '_' för '-').
+        const zoomKey = input.control || input.meta;
+        if (zoomKey && ['-', '_', 'Subtract'].includes(input.key)) {
             applyZoom(win, nextZoom(currentZoom, 'out'));
             event.preventDefault();
             return;
         }
-        if (input.control && (input.key === '=' || input.key === '+')) {
+        if (zoomKey && ['=', '+', 'Add'].includes(input.key)) {
             applyZoom(win, nextZoom(currentZoom, 'in'));
             event.preventDefault();
             return;
         }
-        if (input.control && input.key === '0') {
+        if (zoomKey && ['0', 'Numpad0'].includes(input.key)) {
             applyZoom(win, nextZoom(currentZoom, 'reset'));
             event.preventDefault();
             return;
@@ -293,6 +299,11 @@ function createWindow(profile) {
             if (win.webContents.navigationHistory.canGoForward()) win.webContents.navigationHistory.goForward();
             event.preventDefault();
         }
+    });
+
+    // Samma dörr om inloggningen navigeras i huvudramen i stället för i en popup.
+    win.webContents.on('did-navigate', (_event, url) => {
+        if (isGoogleSignIn(url)) routeToSignInDoor(win);
     });
 
     win.on('app-command', (e, cmd) => {
@@ -314,13 +325,19 @@ function showPicker(win) {
 
 function switchMode(newMode) {
     applyMode(newMode);
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(getUrlForMode(currentMode));
+    const win = mainWindow;
+    if (!win || win.isDestroyed()) return;
+    win.loadURL(pageForMode(currentMode));
+    // TV-läget ÄR dörren: står man där skall appen gå tillbaka till användarens
+    // läge så fort kontot finns, annars blir dörren ett rum man fastnar i.
+    if (currentMode === 'tv') watchForSignIn(win, session.fromPartition(partitionOfWindow(win)));
 }
 
-// Inloggad: YouTubes sida i det läge användaren valt. Inte inloggad: TV-läget, för
-// det är den enda väg Google öppnar för en inbäddad webbläsare — där ligger QR-
-// koden och de åtta tecknen (mätt: första valet "Get started", ett Enter ger
-// "Sign in with your phone — Scan QR code or go to yt.be/activate").
+// Profilen öppnar sin vanliga sida i det läge användaren valt — även utloggad, för
+// skrivbordssidan ser ut som YouTube och lyder zoom. Är läget TV (eller blir det, se
+// routeToSignInDoor) är sidan inloggningsdörren: mätt är första valet där
+// "Get started", och ett Enter ger "Sign in with your phone — Scan QR code or go to
+// yt.be/activate — Enter the code GDM-STY-SDG".
 function startWithProfile(win, customSession) {
     customSession.cookies.get({ domain: '.youtube.com' })
         .then((cookies) => {
@@ -328,16 +345,38 @@ function startWithProfile(win, customSession) {
             if (plan.mode !== currentMode) applyMode(plan.mode);
             win.loadURL(plan.url);
             logViewport(win);
-            if (plan.autoSignIn) {
-                console.log('[OmarchyTube] Ingen session i den här profilen: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
+            if (plan.signIn) {
+                console.log('[OmarchyTube] Inloggningsdörren: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
                 win.setTitle('OmarchyTube — tryck Enter för QR-koden');
                 watchForSignIn(win, customSession);
+            } else if (!plan.signedIn) {
+                // Utloggad i skrivbordsläget: sidan ser ut som YouTube och lyder
+                // zoom. Dörren öppnas när Google-inloggningen faktiskt försöks.
+                console.log('[OmarchyTube] Utloggad profil i skrivbordsläget. Google vägrar sitt lösenordsformulär i en inbäddad webbläsare — appen byter till TV-dörren (QR-koden) när du försöker logga in, eller med F2.');
             }
         })
         .catch((err) => {
             console.warn('[OmarchyTube] Kunde inte läsa profilens kakor:', err.message);
             win.loadURL('https://www.youtube.com/tv');
         });
+}
+
+// Googles lösenordsväg är stängd för inbäddade webbläsare. I stället för att visa
+// deras blockerade formulär går appen till den dörr Google öppnar: TV-appens
+// QR-kod. EN funktion, två vägar in (popup och navigering).
+function routeToSignInDoor(win) {
+    if (!win || win.isDestroyed()) return;
+    const plan = signInPlan();
+    console.log('[OmarchyTube] Google-inloggning i en inbäddad webbläsare är stängd — öppnar TV-dörren (QR-koden).');
+    applyMode(plan.mode);
+    win.loadURL(plan.url);
+    logViewport(win);
+    watchForSignIn(win, session.fromPartition(partitionOfWindow(win)));
+}
+
+function partitionOfWindow(win) {
+    const id = windowProfiles.get(win.webContents.id);
+    return id ? partitionFor(id) : PICKER_PARTITION;
 }
 
 // TV-vägen är en inloggningsdörr, inte en spelare: 10-fotslayouten är grotesk i
@@ -357,13 +396,13 @@ function watchForSignIn(win, customSession) {
         }
         customSession.cookies.get({ domain: '.youtube.com' })
             .then((cookies) => {
-                const plan = planForSession(cookies, readState().mode || 'desktop');
-                if (plan.autoSignIn) return; // fortfarande utloggad
+                if (!isSignedIn(cookies)) return; // fortfarande utloggad
+                const mode = readState().mode || 'desktop';
                 clearInterval(timer);
                 if (win.isDestroyed()) return;
-                console.log(`[OmarchyTube] Kontot finns i sessionen — tillbaka till ${plan.mode}-läget.`);
-                applyMode(plan.mode);
-                win.loadURL(plan.url);
+                console.log(`[OmarchyTube] Kontot finns i sessionen — tillbaka till ${mode}-läget.`);
+                applyMode(mode);
+                win.loadURL(pageForMode(mode));
                 logViewport(win);
             })
             .catch((err) => console.warn('[OmarchyTube] Kunde inte läsa sessionen:', err.message));

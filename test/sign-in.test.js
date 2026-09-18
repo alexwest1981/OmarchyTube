@@ -1,41 +1,36 @@
-// Prov för beslutet "vad skall en profil öppna?".
-//
-// Det här är den regeln som kostade Alex en kväll: en utloggad profil skickades
-// till YouTubes skrivbordssida, där Google svarar en inbäddad webbläsare med
-// "This browser or app may not be secure". Provet pinnar att den vägen inte
-// används igen.
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { SIGN_IN_PAGE, isSignedIn, planForSession } = require('../src/sign-in');
+const { DESKTOP_PAGE, TV_PAGE, isGoogleSignIn, isSignedIn, planForSession, signInPlan } = require('../src/sign-in');
 
-const cookie = (name) => ({ name, domain: '.youtube.com' });
+const session = [{ name: 'SID', value: 'x' }];
 
-test('sessionskakorna räknas, andra inte', () => {
-    assert.strictEqual(isSignedIn([cookie('SID')]), true);
-    assert.strictEqual(isSignedIn([cookie('SAPISID')]), true);
-    assert.strictEqual(isSignedIn([cookie('__Secure-1PSID')]), true);
-    assert.strictEqual(isSignedIn([cookie('PREF'), cookie('VISITOR_INFO1_LIVE')]), false);
+test('en utloggad profil öppnar sin vanliga sida, inte TV-läget', () => {
+    // TV-läget är en dörr, inte en spelare: dess 10-fotslayout lyder inte zoom och
+    // ser grotesk ut i ett normalt fönster (mätt: två gigantiska brickor vid 941 px).
+    assert.deepStrictEqual(planForSession([], 'desktop'), { mode: 'desktop', url: DESKTOP_PAGE, signedIn: false, signIn: false });
+    assert.deepStrictEqual(planForSession([], 'tv'), { mode: 'tv', url: TV_PAGE, signedIn: false, signIn: true });
+});
+
+test('en inloggad profil öppnar lägets sida — och ingen vakt', () => {
+    assert.deepStrictEqual(planForSession(session, 'desktop'), { mode: 'desktop', url: DESKTOP_PAGE, signedIn: true, signIn: false });
+    assert.deepStrictEqual(planForSession(session, 'tv'), { mode: 'tv', url: TV_PAGE, signedIn: true, signIn: false });
+});
+
+test('bara Googles egna sessionskakor räknas', () => {
+    assert.strictEqual(isSignedIn(session), true);
+    assert.strictEqual(isSignedIn([{ name: 'PREF' }, { name: 'VISITOR_INFO1_LIVE' }]), false);
     assert.strictEqual(isSignedIn([]), false);
     assert.strictEqual(isSignedIn(), false);
 });
 
-test('inloggad profil öppnar YouTube i det läge användaren lämnade', () => {
-    const desktop = planForSession([cookie('SID')], 'desktop');
-    assert.deepStrictEqual(desktop, { mode: 'desktop', url: 'https://www.youtube.com', autoSignIn: false });
-
-    const tv = planForSession([cookie('SID')], 'tv');
-    assert.deepStrictEqual(tv, { mode: 'tv', url: 'https://www.youtube.com/tv', autoSignIn: false });
+test('Googles inloggningsväg känns igen, i både popup och navigering', () => {
+    assert.strictEqual(isGoogleSignIn('https://accounts.google.com/ServiceLogin?continue=…'), true);
+    assert.strictEqual(isGoogleSignIn('https://www.youtube.com/signin?action_handle_signin=true'), true);
+    assert.strictEqual(isGoogleSignIn('https://www.youtube.com/watch?v=abc'), false);
+    assert.strictEqual(isGoogleSignIn(''), false);
 });
 
-test('utloggad profil går till TV-lägets QR-väg, oavsett sparat läge', () => {
-    for (const mode of ['desktop', 'tv', undefined, 'något-annat']) {
-        const plan = planForSession([cookie('VISITOR_INFO1_LIVE')], mode);
-        assert.deepStrictEqual(plan, { mode: 'tv', url: SIGN_IN_PAGE, autoSignIn: true });
-    }
-});
-
-test('QR-vägen pekar aldrig på skrivbordssidan som gav Googles avslag', () => {
-    assert.strictEqual(SIGN_IN_PAGE, 'https://www.youtube.com/tv');
-    assert.ok(!SIGN_IN_PAGE.endsWith('.com/'));
+test('dörren är alltid TV-läget med vakten på', () => {
+    assert.deepStrictEqual(signInPlan(), { mode: 'tv', url: TV_PAGE, signedIn: false, signIn: true });
 });

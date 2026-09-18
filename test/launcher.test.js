@@ -65,10 +65,20 @@ test('profilfönstret är fullskärm, och det är inte maximize()', () => {
 });
 
 test('utloggad profil vaktas tills kontot finns, då blir det användarens läge', () => {
-    // TV-vägen är bara en inloggningsdörr: 10-fotslayouten är grotesk i fönster.
+    // TV-vägen är bara en inloggningsdörr: 10-fotslayouten lyder inte zoom och ser
+    // grotesk ut i ett fönster.
     assert.match(code, /customSession\.cookies\.get\(\{ domain: '\.youtube\.com' \}\)/, 'ingen vakt på sessionen');
     assert.match(code, /watchForSignIn\(win, customSession\)/, 'vakten kopplas inte in');
-    assert.match(code, /Kontot finns i sessionen[\s\S]{0,400}loadURL\(plan\.url\)/, 'appen går inte tillbaka till användarens läge efter inloggning');
+    assert.match(code, /Kontot finns i sessionen[\s\S]{0,400}loadURL\(pageForMode\(mode\)\)/, 'appen går inte tillbaka till användarens läge efter inloggning');
+});
+
+test('Googles blockerade inloggningsväg leder till dörren — genom en funktion', () => {
+    // Mätt: Google svarar "This browser or app may not be secure" i en inbäddad
+    // webbläsare. Både popup-vägen och navigeringsvägen skall gå till QR-dörren.
+    const calls = code.match(/routeToSignInDoor\(win\)/g) || [];
+    assert.strictEqual(calls.length, 3, `routeToSignInDoor anropas ${calls.length} gånger (förväntat: definitionen + popup + navigering)`);
+    assert.match(code, /setWindowOpenHandler[\s\S]{0,400}isGoogleSignIn\(url\)/, 'popup-vägen fångas inte');
+    assert.match(code, /did-navigate[\s\S]{0,200}isGoogleSignIn\(url\)/, 'navigeringsvägen fångas inte');
 });
 
 test("'closed' läser aldrig webContents, som redan är förstörd", () => {

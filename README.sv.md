@@ -8,11 +8,15 @@ personen — ett fönster, en Google-session per profil.
 1. Starta **OmarchyTube**: profilväljaren är fönstret.
 2. <kbd>↵</kbd> på en profil öppnar YouTube i det fönstret, i den profilens egen
    session.
-3. Första gången på en profil visar YouTubes TV-inloggning en **QR-kod och en
-   åttateckenskod** (första valet på den skärmen är *Get started* — tryck
-   <kbd>↵</kbd> om du inte är där). Skanna med mobilen, eller tryck <kbd>F4</kbd>
-   för att öppna `yt.be/activate` i en webbläsare och skriva koden där. Kontot
-   hamnar i profilen och stannar där.
+3. Inloggningen är en dörr appen öppnar **åt** dig, inte en snårskog. En utloggad
+   profil öppnar YouTubes vanliga sida — den ser ut som YouTube och lyder zoom. I
+   samma stund du försöker med YouTubes egen inloggning fångar appen Googles
+   blockerade inbäddade väg och tar dig till TV-inloggningen i stället: en **QR-kod
+   och en åttateckenskod** (första valet på den skärmen är *Get started* — tryck
+   <kbd>↵</kbd> om du inte är på kodsidan). Skanna med mobilen, eller tryck
+   <kbd>F4</kbd> för att öppna `yt.be/activate`. Kontot hamnar i profilen, och appen
+   går själv tillbaka till ditt vanliga läge. <kbd>F2</kbd> tar dig till dörren
+   direkt.
 4. En profil öppnas som en **fullskärmsapp**. Det är inte utsmyckning: Hyprland
    tilade ett vanligt fönster till halva skärmen (mätt: 941 px), och YouTubes
    10-fotslayout i 941 px visar två gigantiska brickor och kanten av en tredje i
@@ -49,7 +53,9 @@ blir tätare.
 ## Varför inloggningen går via TV-skärmen
 
 Den uppenbara vägen — YouTubes vanliga lösenordsformulär — är stängd för varje
-inbäddad webbläsare. Mätt två gånger, i en riktig körning:
+inbäddad webbläsare. Därför fångar appen den i stället för att visa den: ett klick
+på *Logga in* på YouTubes sida skulle landa i ett Google-fel i appens eget fönster,
+vilket ser ut som en trasig app. Mätt två gånger, i en riktig körning:
 
 > **Couldn't sign you in.** This browser or app may not be secure.
 
@@ -95,7 +101,7 @@ läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 npm test
 ```
 
-35 prov: zoomstegen, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
+37 prov: zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
 aldrig dela en), webbläsaridentiteten per läge, inloggningsbeslutet, IPC-kanalerna,
 och ett arkitekturprov som fäller om en injektor, ett zoom-anrop eller ett
 sidskript kommer tillbaka.

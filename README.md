@@ -8,11 +8,15 @@ one window, one Google session per profile.
 1. Launch **OmarchyTube**: the profile picker is the window.
 2. <kbd>↵</kbd> on a profile opens YouTube in that window, in that profile's own
    session partition.
-3. First time on a profile: YouTube's TV sign-in shows a **QR code and an
-   eight-character code** (the first item on that screen is *Get started* — press
-   <kbd>↵</kbd> if you are not there yet). Scan it with your phone, or press
-   <kbd>F4</kbd> to open `yt.be/activate` in a browser and type the code there.
-   The account lands in that profile and stays there.
+3. Signing in is a door the app opens **for** you, not a maze. A signed-out
+   profile opens YouTube's normal page — it looks like YouTube and it obeys zoom.
+   The moment you try YouTube's own sign-in, the app catches Google's blocked
+   embedded path and takes you to the TV sign-in instead: a **QR code and an
+   eight-character code** (that screen's first item is *Get started* — press
+   <kbd>↵</kbd> if you are not on the code screen yet). Scan it with your phone, or
+   press <kbd>F4</kbd> to open `yt.be/activate`. The account lands in that profile,
+   and the app returns to your normal mode on its own. <kbd>F2</kbd> takes you to
+   the door directly.
 4. A profile opens as a **fullscreen app**. That is not decoration: Hyprland tiles
    a normal window to half the screen (941 px measured), and YouTube's ten-foot TV
    layout in 941 px shows two gigantic tiles and the edge of a third instead of a
@@ -49,7 +53,9 @@ one that gets denser.
 ## Why sign-in goes through the TV screen
 
 The obvious route — YouTube's normal password form — is closed to every
-embedded browser. Measured twice, from a real run:
+embedded browser. That is why the app intercepts it instead of showing it:
+clicking *Sign in* on YouTube's page would land on a Google error in the app's
+own window, which looks like a broken app. Measured twice, from a real run:
 
 > **Couldn't sign you in.** This browser or app may not be secure.
 
@@ -97,7 +103,7 @@ the network layer.
 npm test
 ```
 
-35 tests: the zoom steps, the profile rules (ids must survive being partition names, two profiles
+37 tests: the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
 may never share one), the user agent per mode, the sign-in decision, the IPC
 channels, and an architecture test that fails if an injector, a page script or a
 second zoom mechanism ever comes back.

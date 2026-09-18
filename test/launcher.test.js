@@ -26,9 +26,18 @@ test('en ruta, och allt sker i den', () => {
 });
 
 test('appen rör inte YouTubes sidor', () => {
-    for (const forbidden of ['insertCSS', 'executeJavaScript', 'injector', 'setZoomFactor', 'setZoomLevel']) {
+    for (const forbidden of ['insertCSS', 'executeJavaScript', 'injector', 'setZoomLevel']) {
         assert.ok(!code.includes(forbidden), `main.js innehåller "${forbidden}" — det lagret skulle vara rivet`);
     }
+});
+
+test('zoomen går genom modulen, och bara med ett grepp', () => {
+    // Mätt: setZoomLevel(0) nollställde setZoomFactor(0.49) — två mekanismer
+    // samtidigt bet inte, och loggen skrev avsikten. setZoomLevel är därför borta
+    // för gott, och resultatet läses med getZoomFactor().
+    assert.match(code, /require\('\.\/zoom'\)/, 'zoomen kommer inte från modulen');
+    assert.match(code, /applyZoom\(win, nextZoom\(currentZoom,/, 'tangenterna går inte genom applyZoom');
+    assert.match(code, /getZoomFactor\(\)\.toFixed\(2\)/, 'loggen skriver avsikten i stället för resultatet');
 });
 
 test('ingen webbläsare startas vid sidan av appen', () => {

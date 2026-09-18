@@ -32,6 +32,20 @@ omarchy-tube --tv       # starta på youtube.com/tv
 omarchy-tube --desktop  # starta på youtube.com
 ```
 
+## Hur många videor som får plats
+
+Korten storleksbestäms av sidans egna brytpunkter, så att zooma ut **vyn** ger plats
+för fler: 1920 px ger fyra kolumner i YouTubes skrivbordslayout, och standardzoomen
+**0,80** ger en CSS-yta på 2400 px — fem till sex kolumner.
+<kbd>Ctrl</kbd>+<kbd>-</kbd>, <kbd>Ctrl</kbd>+<kbd>+</kbd> och
+<kbd>Ctrl</kbd>+<kbd>0</kbd> stegar, och värdet sparas (`picker-state.json`).
+
+Zoomen är webbläsarens egen vy-inställning, inte ett ingrepp i YouTubes sidor —
+ingen CSS och ingen JavaScript går in. En mätt reservation: TV-layouten är byggd i
+rem mot fönsterbredden, så där ändrar zoom ingenting; den ser likadan ut hur man än
+skalar. TV-läget är inloggningsdörren och soffläget — skrivbordslayouten är den som
+blir tätare.
+
 ## Varför inloggningen går via TV-skärmen
 
 Den uppenbara vägen — YouTubes vanliga lösenordsformulär — är stängd för varje
@@ -71,6 +85,7 @@ läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 | `src/profiles.js` | profillistan (`userData/profiles.json`), ren och provad |
 | `src/user-agent.js` | TV- och skrivbordsidentiteterna, rena och provade |
 | `src/sign-in.js` | inloggad ⇒ lägets sida, utloggad ⇒ TV-inloggningen, ren och provad |
+| `src/zoom.js` | zoomstegen bakom Ctrl+- och Ctrl+0, rena och provade |
 | `src/profiles.html/.css/-page.js` | skärmen "Vem skall titta?" |
 | `src/preload.js` | rendererns hela yta: fem profilkanaler |
 
@@ -80,7 +95,7 @@ läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 npm test
 ```
 
-30 prov: profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
+35 prov: zoomstegen, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
 aldrig dela en), webbläsaridentiteten per läge, inloggningsbeslutet, IPC-kanalerna,
 och ett arkitekturprov som fäller om en injektor, ett zoom-anrop eller ett
 sidskript kommer tillbaka.

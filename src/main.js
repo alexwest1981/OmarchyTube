@@ -28,6 +28,7 @@ const path = require('path');
 const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
 const { getUserAgentForMode } = require('./user-agent');
 const { planForSession } = require('./sign-in');
+const { DEFAULT: DEFAULT_ZOOM, clampZoom, nextZoom } = require('./zoom');
 
 // Spelaren startar när sidan byts (användaren tryckte Enter i TV-appen och
 // fönstret laddar en tittarsida). Chromium räknar bara gester på sidan själv —
@@ -79,6 +80,11 @@ let currentMode = argv.includes('--tv') ? 'tv'
     : argv.includes('--desktop') ? 'desktop'
         : (readState().mode || 'desktop');
 
+// Zoomen sparas per användare: den är en kalibrering för hans skärm och ögon, inte
+// en konstant. Standard 0,80 ger 2400 CSS-px i en 1920-ruta ⇒ 5–6 kort i bredd i
+// stället för 4.
+let currentZoom = clampZoom(readState().zoom ?? DEFAULT_ZOOM);
+
 const getUrlForMode = (mode) => (mode === 'tv' ? 'https://www.youtube.com/tv' : 'https://www.youtube.com');
 
 function configureSession(targetSession) {
@@ -120,6 +126,16 @@ function configureSession(targetSession) {
     );
 }
 
+// Zoomens enda väg. Skriver resultatet, inte avsikten — den läxan kostade en kväll.
+function applyZoom(win, next) {
+    currentZoom = clampZoom(next);
+    writeState({ zoom: currentZoom });
+    if (win && !win.isDestroyed()) win.webContents.setZoomFactor(currentZoom);
+    console.log(`[OmarchyTube] zoom => ${win && !win.isDestroyed() ? win.webContents.getZoomFactor().toFixed(2) : currentZoom.toFixed(2)}`);
+    if (win && !win.isDestroyed()) logViewport(win);
+    return currentZoom;
+}
+
 function applyMode(newMode) {
     currentMode = newMode;
     writeState({ mode: currentMode });
@@ -136,7 +152,10 @@ function logViewport(win) {
         const bounds = win.getContentBounds();
         const display = screen.getDisplayMatching(bounds);
         const zoom = win.webContents.getZoomFactor();
-        console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | zoom ${zoom.toFixed(2)} | skärmens skala ${display.scaleFactor} | fullskärm ${win.isFullScreen()} | ${currentMode}`);
+        // CSS-ytan är det tal som avgör hur många kort som får plats: 1920 px vid
+        // zoom 1, 2400 vid 0,80.
+        const cssWidth = Math.round(bounds.width / zoom);
+        console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | zoom ${zoom.toFixed(2)} | ≈${cssWidth} CSS-px bred | skärmens skala ${display.scaleFactor} | fullskärm ${win.isFullScreen()} | ${currentMode}`);
     } catch (err) {
         console.warn('[OmarchyTube] Kunde inte läsa rutan:', err.message);
     }
@@ -183,6 +202,9 @@ function createWindow(profile) {
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: false,
+            // Enda skalningen i appen, och den sitter på fönstret — aldrig på
+            // sidans innehåll. Bara zoomFactor; setZoomLevel nollställer den (mätt).
+            zoomFactor: profile ? currentZoom : 1,
             plugins: true,
             webSecurity: true
         }
@@ -238,6 +260,22 @@ function createWindow(profile) {
         // Koden från TV-skärmen skrivs in i en webbläsare — F4 öppnar rätt sida.
         if (input.key === 'F4') {
             shell.openExternal('https://yt.be/activate');
+            event.preventDefault();
+            return;
+        }
+        // Fler eller färre kort: samma tangentbord som i en webbläsare.
+        if (input.control && (input.key === '-' || input.key === '_')) {
+            applyZoom(win, nextZoom(currentZoom, 'out'));
+            event.preventDefault();
+            return;
+        }
+        if (input.control && (input.key === '=' || input.key === '+')) {
+            applyZoom(win, nextZoom(currentZoom, 'in'));
+            event.preventDefault();
+            return;
+        }
+        if (input.control && input.key === '0') {
+            applyZoom(win, nextZoom(currentZoom, 'reset'));
             event.preventDefault();
             return;
         }

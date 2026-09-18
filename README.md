@@ -31,6 +31,21 @@ omarchy-tube --tv       # start on youtube.com/tv
 omarchy-tube --desktop  # start on youtube.com
 ```
 
+## How many videos fit
+
+Cards are sized by the page's own breakpoints, so zooming the **view** out fits
+more of them: 1920 px gives four columns on YouTube's desktop layout, and the
+default zoom of **0.80** gives a 2400 CSS px viewport — five to six.
+<kbd>Ctrl</kbd>+<kbd>-</kbd>, <kbd>Ctrl</kbd>+<kbd>+</kbd> and
+<kbd>Ctrl</kbd>+<kbd>0</kbd> step it, and the value is remembered
+(`picker-state.json`).
+
+Zoom is the browser's own view setting, not an edit to YouTube's pages — no CSS
+and no JavaScript goes in. One measured caveat: the TV layout is built in rem
+against the window width, so zoom changes nothing there; it looks the same at any
+scale. TV mode is the sign-in door and the sofa mode — the desktop layout is the
+one that gets denser.
+
 ## Why sign-in goes through the TV screen
 
 The obvious route — YouTube's normal password form — is closed to every
@@ -72,6 +87,7 @@ the network layer.
 | `src/profiles.js` | the profile list (`userData/profiles.json`), pure and tested |
 | `src/user-agent.js` | the TV and desktop identities, pure and tested |
 | `src/sign-in.js` | signed in ⇒ mode page, signed out ⇒ TV sign-in, pure and tested |
+| `src/zoom.js` | the zoom steps behind Ctrl+- and Ctrl+0, pure and tested |
 | `src/profiles.html/.css/-page.js` | the "who is watching" screen |
 | `src/preload.js` | the renderer's entire surface: five profile channels |
 
@@ -81,7 +97,7 @@ the network layer.
 npm test
 ```
 
-30 tests: the profile rules (ids must survive being partition names, two profiles
+35 tests: the zoom steps, the profile rules (ids must survive being partition names, two profiles
 may never share one), the user agent per mode, the sign-in decision, the IPC
-channels, and an architecture test that fails if an injector, a zoom call or a
-page script ever comes back.
+channels, and an architecture test that fails if an injector, a page script or a
+second zoom mechanism ever comes back.

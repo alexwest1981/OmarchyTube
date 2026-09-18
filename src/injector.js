@@ -442,6 +442,58 @@
         }
     }, 1000);
 
+    // --- Module 6: Leanback Density ---
+    // TV-läget ritar i rem från <html> och appen sätter rotstorleken efter
+    // skärmbredden. Klassen gör browse- och söksidorna tätare (se Level 9 i
+    // styles.css), men lämnar spelaren ifred: dess kontroller sitter i samma
+    // rem-skala och blir oläsliga om de krymper med.
+    function isTvBrowse() {
+        return window.location.pathname.startsWith('/tv')
+            && !window.location.hash.startsWith('#/watch');
+    }
+
+    function applyLeanbackDensity() {
+        document.documentElement.classList.toggle('omarchy-leanback', isTvBrowse());
+    }
+
+    window.addEventListener('yt-navigate-finish', applyLeanbackDensity);
+    setInterval(applyLeanbackDensity, 1000);
+    applyLeanbackDensity();
+
+    // --- Module 7: Key Hints on First Run ---
+    // En TV-app har inga menyer att upptäcka tangenterna i. Visas en gång, och
+    // försvinner vid första tangenttryck eller efter tolv sekunder.
+    const KEY_HINTS = [
+        ['\u2190 \u2192 \u2191 \u2193', 'Move'],
+        ['Enter', 'Select'],
+        ['Esc / Q', 'Back'],
+        ['F2', 'Desktop mode'],
+        ['F11', 'Fullscreen'],
+    ];
+
+    function showKeyHints() {
+        if (localStorage.getItem('omarchy-hints-shown') === '1') return;
+        if (document.getElementById('omarchy-key-hints')) return;
+        const box = document.createElement('div');
+        box.id = 'omarchy-key-hints';
+        box.innerHTML = KEY_HINTS.map(([keys, label]) =>
+            `<div class="omarchy-hint-row"><kbd>${keys}</kbd><span>${label}</span></div>`
+        ).join('');
+        document.body.appendChild(box);
+        requestAnimationFrame(() => box.classList.add('show'));
+
+        const hide = () => {
+            box.classList.remove('show');
+            localStorage.setItem('omarchy-hints-shown', '1');
+            window.removeEventListener('keydown', hide);
+            setTimeout(() => box.remove(), 400);
+        };
+        window.addEventListener('keydown', hide);
+        setTimeout(hide, 12000);
+    }
+
+    setTimeout(showKeyHints, 1500);
+
     // In-page keyboard handler for Escape, Backspace, and 'q'
     window.addEventListener('keydown', (e) => {
         const isInput = document.activeElement && (

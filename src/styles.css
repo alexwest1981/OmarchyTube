@@ -240,3 +240,70 @@ html, body {
     pointer-events: auto !important;
     transform: translateY(0) !important;
 }
+
+/* --- Level 9: Leanback Density (mindre kort, fler rader) --- */
+/* TV-läget ritar allt i rem från <html>. Appen sätter rotstorleken efter
+   skärmbredden (24 px vid 1920) och ett kort blir då 528x501 px — en rad syns i
+   taget. Klassen nedan halverar roten och därmed kort, radavstånd och mellanrum
+   i samma proportion. Mätt vid 1920x1080: kort 264x251, radavstånd 327 px, tre
+   hela rader i bild (fyra vid 1920x1200) mot en rad före; titeln mäter 18 px och
+   metadata 12 px, alltså läsbart kvar. Appens egen krom är px-baserad (toast,
+   tillbaka-knapp) och rörs inte. Klassen sätts av injector.js, och bara på
+   bläddrings- och söksidorna: spelarens kontroller ritas i samma rem-skala och
+   ska stå kvar i sin egen storlek. */
+html.omarchy-leanback {
+    font-size: 50% !important;
+}
+
+/* --- Level 10: Key Hints (first run) --- */
+#omarchy-key-hints {
+    position: fixed;
+    left: 28px;
+    bottom: 28px;
+    padding: 14px 18px;
+    background: rgba(15, 15, 20, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    border-radius: 14px;
+    color: #f3f4f6;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 2147483647;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+#omarchy-key-hints.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.omarchy-hint-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.omarchy-hint-row kbd {
+    min-width: 76px;
+    padding: 3px 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    color: #00d482;
+}
+
+.omarchy-hint-row span {
+    color: rgba(243, 244, 246, 0.85);
+}

@@ -32,3 +32,14 @@ test('tangenthjälpen visas en gång och kan stängas', () => {
     assert.match(js, /omarchy-hints-shown/, 'första-gången-flaggan saknas');
     assert.match(js, /addEventListener\('keydown', hide\)/, 'tipset stängs inte av en tangent');
 });
+
+test('ingen innerHTML i det som injiceras i YouTubes sidor', () => {
+    // YouTubes CSP kräver TrustedHTML: `el.innerHTML = ...` kastar och koden
+    // dör tyst. Tangenthjälpen uteblev i den byggda appen av just det skälet.
+    const files = ['injector.js', 'main.js'];
+    for (const f of files) {
+        const src = readFileSync(join(__dirname, '..', 'src', f), 'utf8');
+        assert.doesNotMatch(src, /\.innerHTML\s*=/, `${f} sätter innerHTML`);
+        assert.doesNotMatch(src, /insertAdjacentHTML/, `${f} använder insertAdjacentHTML`);
+    }
+});

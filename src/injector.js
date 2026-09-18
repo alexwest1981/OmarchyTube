@@ -474,11 +474,22 @@
     function showKeyHints() {
         if (localStorage.getItem('omarchy-hints-shown') === '1') return;
         if (document.getElementById('omarchy-key-hints')) return;
+        if (!document.body) return;
         const box = document.createElement('div');
         box.id = 'omarchy-key-hints';
-        box.innerHTML = KEY_HINTS.map(([keys, label]) =>
-            `<div class="omarchy-hint-row"><kbd>${keys}</kbd><span>${label}</span></div>`
-        ).join('');
+        // Element för element: YouTubes Trusted Types-CSP kastar på innerHTML
+        // ("This document requires 'TrustedHTML' assignment"), och tipset
+        // uteblev därför tyst i den byggda appen.
+        for (const [keys, label] of KEY_HINTS) {
+            const row = document.createElement('div');
+            row.className = 'omarchy-hint-row';
+            const kbd = document.createElement('kbd');
+            kbd.textContent = keys;
+            const span = document.createElement('span');
+            span.textContent = label;
+            row.append(kbd, span);
+            box.append(row);
+        }
         document.body.appendChild(box);
         requestAnimationFrame(() => box.classList.add('show'));
 

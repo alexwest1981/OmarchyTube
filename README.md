@@ -85,13 +85,19 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 
 ## 🔐 How Sign-In Works
 
-1. Launch **OmarchyTube** (starts in TV Mode by default).
-2. Use the arrow keys or mouse to navigate to the left sidebar and select **Sign in**.
-3. A large QR code and an 8-character activation code will appear on screen.
-4. Scan the QR code using your smartphone camera (or open [youtube.com/activate](https://youtube.com/activate) in any browser).
-5. Confirm access with your Google Account — the app connects immediately and preserves your login credentials.
-
----
+1. Launch **OmarchyTube**. It opens on its own grid.
+2. The grid works without an account: **search** is answered signed out, the
+   **home feed** is not — YouTube answers it with nothing until you have an
+   account (its own words are *"Your YouTube history is off"*). The grid says so
+   and shows a search while you are signed out.
+3. Press <kbd>F1</kbd> to open YouTube's own TV view, then use the arrow keys to
+   navigate to the left sidebar and select **Sign in**.
+4. A large **QR code** and an 8-character activation code appear on screen.
+5. Scan the QR code with your phone camera (or open [youtube.com/activate](https://youtube.com/activate) in any browser).
+6. Confirm access with your Google Account — the app connects immediately and keeps the session.
+7. Press <kbd>Alt</kbd> + <kbd>Home</kbd> (or <kbd>F1</kbd>) to come back to the
+   grid: the home feed is personal now, because the grid's requests run in the
+   same session the sign-in just filled.
 
 ## 🛠️ Installation from Source
 

@@ -73,8 +73,17 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 
 ## 🔐 Hur inloggningen fungerar
 
-1. Starta appen (den öppnas i TV-läget som standard).
-2. Stega med piltangenterna till sidomenyn till vänster och klicka på **Logga in / Sign in**.
-3. En stor, tydlig **QR-kod** och en 8-siffrig aktiveringskod visas på skärmen.
-4. Skanna QR-koden med mobilens kamera (eller öppna [youtube.com/activate](https://youtube.com/activate) i din webbläsare).
-5. Tryck **Tillåt** – appen loggas in direkt och sparar dina spellistor och prenumerationer permanent!
+1. Starta appen. Den öppnar i sitt **eget rutnät**.
+2. Rutnätet fungerar utan konto: **sökningen** svarar inloggningsfri, men
+   **hemflödet** gör det inte — YouTube svarar med ingenting förrän du har ett
+   konto (dess eget svar är *"Your YouTube history is off"*). Rutnätet säger det
+   och visar en sökning så länge du är utloggad.
+3. Tryck <kbd>F1</kbd> för att öppna YouTubes egen TV-vy, stega med piltangenterna
+   till sidomenyn till vänster och välj **Logga in / Sign in**.
+4. En stor, tydlig **QR-kod** och en 8-siffrig aktiveringskod visas på skärmen.
+5. Skanna QR-koden med mobilens kamera (eller öppna [youtube.com/activate](https://youtube.com/activate) i din webbläsare).
+6. Tryck **Tillåt** – appen loggas in direkt och sparar inloggningen.
+7. Tryck <kbd>Alt</kbd> + <kbd>Home</kbd> (eller <kbd>F1</kbd>) för att gå tillbaka
+   till rutnätet: hemflödet är personligt nu, för rutnätets anrop går i samma
+   session som inloggningen fyllde.
+

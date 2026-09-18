@@ -8,6 +8,9 @@ const grid = document.getElementById('grid');
 const status = document.getElementById('status');
 const query = document.getElementById('query');
 
+const notice = document.getElementById('notice');
+const { FALLBACK_QUERY, FALLBACK_NOTE, fallbackQuery } = window.OmarchySignedOut;
+
 const state = { items: [], index: 0 };
 
 // The column count is whatever the CSS produced, read back from the layout
@@ -90,9 +93,24 @@ async function load(kind, text) {
         // never moved because the input still had focus).
         grid.focus();
         if (!items.length) {
-            status.textContent = kind === 'search'
-                ? 'No results'
-                : 'Signed out — search above, or press F1 for YouTube TV and sign in';
+            // An empty home feed is what YouTube answers while signed out, and
+            // it is not a failure: the reply says "Your YouTube history is off"
+            // (measured). Search, on the other hand, answers without an account
+            // (measured: 31 items for this query), so the window fills with
+            // something to press instead of a black rectangle — and the notice
+            // above it says why and how to sign in.
+            const fallback = fallbackQuery(kind, items);
+            notice.hidden = false;
+            if (fallback) {
+                query.value = fallback;
+                notice.textContent = FALLBACK_NOTE.replace('QUERY', `\u201c${fallback}\u201d`);
+                return load('search', fallback);
+            }
+            notice.textContent = FALLBACK_NOTE.replace('QUERY', `\u201c${query.value.trim()}\u201d`);
+            status.textContent = 'No results';
+        } else {
+            notice.hidden = true;
+            notice.textContent = '';
         }
     } catch (err) {
         state.items = [];

@@ -10,6 +10,13 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 
 ## ✨ Features
 
+- 🏠 **Own Browse Grid (the app's home)**
+  - The app opens on its own grid: a keyboard-first wall of video cards built on YouTube's own data (InnerTube), not a wrapped webpage.
+  - <kbd>/</kbd> searches, arrows move, <kbd>Enter</kbd> plays. Playback opens YouTube's **desktop watch page**, so ad blocking, SponsorBlock and the floating back button all still apply.
+  - <kbd>F1</kbd> switches to YouTube's own view (TV or desktop, per mode); <kbd>Escape</kbd> or <kbd>Alt</kbd> + <kbd>Home</kbd> brings the grid back.
+
+![The browse grid at 1920×1080](screenshots/browse-1920x1080.png)
+
 - 📱 **Seamless QR Code Sign-In (TV / Leanback Mode)**
   - No risk of Google's *"This browser or app may not be secure"* error.
   - Authenticates via Google's official **OAuth Device Flow**: simply scan the on-screen QR code with your phone camera or visit `youtube.com/activate`.
@@ -30,7 +37,7 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 
 - ↩️ **Floating Quick-Back Button & Video Exit**
   - Floating **`[ ← Back ]`** button smoothly appears in the top-left corner on mouse movement while watching videos.
-  - Instantly exit playing videos and return to your browse feed via <kbd>Escape</kbd>, <kbd>Backspace</kbd>, or Mouse Back Button (Mouse 4).
+  - Instantly exit playing videos and return to the grid via <kbd>Escape</kbd>, <kbd>Backspace</kbd>, or Mouse Back Button (Mouse 4).
 
 - 🪟 **Tailored for Omarchy & Hyprland**
   - Native Wayland client (`--ozone-platform=wayland`).
@@ -60,7 +67,11 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 
 | Key / Mouse | Action |
 |---|---|
-| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | **Exit playing video and return to home feed** |
+| <kbd>F1</kbd> | **Switch between the app's own grid and YouTube's own view** (TV or desktop, per mode) |
+| <kbd>/</kbd> | Focus the grid's search field |
+| <kbd>Arrow Keys</kbd> / <kbd>PageUp</kbd> / <kbd>PageDown</kbd> / <kbd>Home</kbd> / <kbd>End</kbd> | Move around the grid |
+| <kbd>Enter</kbd> | Play the selected card (opens YouTube's watch page) |
+| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | In a video: **exit it and return to the grid**. On the grid: **back to the home feed** |
 | Click **`[ ← Back ]`** button | **Floating exit button shown on mouse movement** |
 | Mouse Button 4 (Back) | Exit video / browser history back |
 | <kbd>F2</kbd> | **Toggle between TV Mode and Desktop Mode** |
@@ -68,7 +79,7 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 | <kbd>Arrow Keys</kbd> + <kbd>Enter</kbd> | Navigate and select items in TV Mode |
 | <kbd>Space</kbd> / <kbd>k</kbd> | Play / Pause video |
 | <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Reload current page |
-| <kbd>Alt</kbd> + <kbd>Home</kbd> | Return to YouTube homepage |
+| <kbd>Alt</kbd> + <kbd>Home</kbd> | Return to the grid |
 
 ---
 

@@ -30,9 +30,8 @@ if (process.platform === 'linux') {
     app.setDesktopName('OmarchyTube.desktop');
 }
 
-// User-Agents
-const TV_USER_AGENT = 'Mozilla/5.0 (Web0S; SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.196 Safari/537.36 WebAppManager';
-const DESKTOP_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+// User-Agents live in ./user-agent (pure, so npm test can reach the mapping)
+const { getUserAgentForMode } = require('./user-agent');
 
 let mainWindow = null;
 const stateFile = path.join(app.getPath('userData'), 'window-state.json');
@@ -70,10 +69,6 @@ function saveWindowState(extra = {}) {
 // Detect mode from CLI args or saved preference (defaults to 'tv')
 const args = process.argv.slice(2);
 let currentMode = args.includes('--desktop') ? 'desktop' : (args.includes('--tv') ? 'tv' : (loadWindowState().mode || 'tv'));
-
-function getUserAgentForMode(mode) {
-    return mode === 'tv' ? TV_USER_AGENT : DESKTOP_USER_AGENT;
-}
 
 function getUrlForMode(mode) {
     return mode === 'tv' ? 'https://www.youtube.com/tv' : 'https://www.youtube.com';

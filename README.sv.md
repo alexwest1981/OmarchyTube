@@ -10,6 +10,13 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 
 ## ✨ Funktioner
 
+- 🏠 **Eget rutnät (appens startsida)**
+  - Appen öppnar i sitt eget rutnät: en tangentbordsstyrd vägg av videokort byggd på YouTubes egna data (InnerTube), inte en inbäddad webbsida.
+  - <kbd>/</kbd> söker, pilarna flyttar, <kbd>Enter</kbd> spelar upp. Uppspelningen sker på YouTubes **vanliga tittarsida**, så annonsblockering, SponsorBlock och den flytande tillbaka-knappen gäller fortfarande.
+  - <kbd>F1</kbd> växlar till YouTubes egen vy (TV eller desktop, beroende på läge); <kbd>Escape</kbd> eller <kbd>Alt</kbd> + <kbd>Home</kbd> tar dig tillbaka till rutnätet.
+
+![Rutnätet i 1920×1080](screenshots/browse-1920x1080.png)
+
 - 📱 **Säker QR-kodsinloggning (TV/Leanback-läge)**:
   - Ingen risk för Googles *"This browser or app may not be secure"*.
   - Logga in med Googles officiella **OAuth Device Flow**: skanna QR-koden med mobilen eller gå till `youtube.com/activate`.
@@ -48,7 +55,11 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 
 | Tangent / Mus | Funktion |
 |---|---|
-| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | **Backa ur video till hemskärmen / feeden** |
+| <kbd>F1</kbd> | **Växla mellan appens eget rutnät och YouTubes egen vy** (TV eller desktop, beroende på läge) |
+| <kbd>/</kbd> | Fokusera rutnätets sökfält |
+| <kbd>Piltangenter</kbd> / <kbd>PageUp</kbd> / <kbd>PageDown</kbd> / <kbd>Home</kbd> / <kbd>End</kbd> | Flytta dig i rutnätet |
+| <kbd>Enter</kbd> | Spela upp det markerade kortet (öppnar YouTubes tittarsida) |
+| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | I ett videoklipp: **lämna videon och gå tillbaka till rutnätet**. I rutnätet: **tillbaka till hemskärmen** |
 | Klick på `[ ← Tillbaka ]` i hörnet | **Flytande tillbaka-knapp som visas vid musrörelse** |
 | Musknapp 4 (Bakåt) | Backa ur video / historik |
 | <kbd>F11</kbd> | Växla fönstrets helskärmsläge |
@@ -56,7 +67,7 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 | <kbd>Pilar</kbd> + <kbd>Enter</kbd> | Navigera och välj i TV-läget |
 | <kbd>Mellanslag</kbd> / <kbd>k</kbd> | Spela / Pausa |
 | <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Ladda om sidan |
-| <kbd>Alt</kbd> + <kbd>Home</kbd> | Gå till startsidan |
+| <kbd>Alt</kbd> + <kbd>Home</kbd> | Tillbaka till rutnätet |
 
 ---
 

@@ -225,6 +225,8 @@ function createWindow(profile) {
     }
 
     win.webContents.setUserAgent(getUserAgentForMode(currentMode));
+    // Skalan hör till fönstrets bredd, inte bara till laddningen.
+    win.on('resize', () => fitView(win));
 
     const injectResources = (contents) => {
         const url = contents.getURL();
@@ -250,7 +252,7 @@ function createWindow(profile) {
         const url = win.webContents.getURL();
         if (!url.startsWith('file://')) onBrowsePage = false;
         injectResources(win.webContents);
-        if (url.includes('youtube.com')) measureView(win);
+        if (url.includes('youtube.com')) fitView(win);
     });
 
     if (profile) {
@@ -373,7 +375,7 @@ function createWindow(profile) {
         }
 
         if (input.alt && input.key === 'ArrowRight' && input.type === 'keyDown') {
-            if (mainWindow.webContents.canGoForward()) mainWindow.webContents.goForward();
+            if (mainWindow.webContents.navigationHistory.canGoForward()) mainWindow.webContents.navigationHistory.goForward();
             event.preventDefault();
         }
     });
@@ -396,31 +398,46 @@ function createWindow(profile) {
     });
 }
 
-// Alex 2026-09-18: YouTubes TV-app ritade sig i en fjärdedel av rutan, uppe till
-// vänster, och inloggningssidan blev "alldeles för förminskad". Det är vad en sida
-// ser ut som när den är utzoomad — och zoomnivån sparas per sajt och partition i
-// Chromium, så den kan ha följt med från ett tidigare varv. Vi sätter den till 1
-// vid varje navigering och skriver ut vad sidan tror om rutan, så nästa gång står
-// svaret i terminalen i stället för i en gissning.
-function measureView(win) {
+// YouTubes TV-app räknar sin egen skala ur fönstrets bredd — och skalan går med
+// kvadraten på bredden. Mätt hos Alex 2026-09-18: fönstret 941x1030 gav rotfonten
+// 5,88 px mot 24 px vid 1920 bredd. Det är hela "bara 1/4 av rutan synlig": appen
+// tror att den står på en 1920 bred TV och krymper allt efter hur långt ifrån den
+// är. Vi låter den tro det — zoomfaktorn ställs så att sidan alltid lägger ut sig
+// för 1920 CSS-pixlar och skalas till fönstret i stället. Desktop-läget
+// (youtube.com utan /tv) är en vanlig webbsida och skalas inte alls.
+const TV_LAYOUT_WIDTH = 1920;
+
+function fitView(win) {
+    if (!win || win.isDestroyed()) return;
+
+    const tvPage = win.webContents.getURL().includes('youtube.com/tv');
+    let factor = 1;
+    if (tvPage) {
+        const width = win.getBounds().width || TV_LAYOUT_WIDTH;
+        factor = Math.min(Math.max(width / TV_LAYOUT_WIDTH, 0.35), 2);
+    }
     try {
-        win.webContents.setZoomFactor(1);
+        win.webContents.setZoomFactor(factor);
         win.webContents.setZoomLevel(0);
     } catch (err) {
-        console.warn('[OmarchyTube] Kunde inte nollställa zoom:', err.message);
+        console.warn('[OmarchyTube] Kunde inte sätta zoom:', err.message);
+        return;
     }
-    win.webContents.executeJavaScript(`(() => ({
-        view: [innerWidth, innerHeight],
-        dpr: devicePixelRatio,
-        screen: [screen.width, screen.height],
-        rootFont: getComputedStyle(document.documentElement).fontSize
-    }))()`).then((seen) => {
-        const bounds = win.getBounds();
-        const mismatch = seen.view[0] !== bounds.width || seen.view[1] !== bounds.height;
-        console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | sidan säger ${seen.view[0]}x${seen.view[1]}`
-            + ` | dpr ${seen.dpr} | skärm ${seen.screen[0]}x${seen.screen[1]} | rotfont ${seen.rootFont}`
-            + (mismatch ? '  <-- sidan och rutan är inte samma storlek' : ''));
-    }).catch(() => {});
+
+    // Läs av efteråt: appen räknar om sin skala när vyn ändras, och raden finns
+    // för att kunna läsas i stället för att gissas.
+    setTimeout(() => {
+        if (win.isDestroyed()) return;
+        win.webContents.executeJavaScript(`(() => ({
+            view: [innerWidth, innerHeight], dpr: devicePixelRatio,
+            rootFont: getComputedStyle(document.documentElement).fontSize
+        }))()`).then((seen) => {
+            const bounds = win.getBounds();
+            console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | sidan säger ${seen.view[0]}x${seen.view[1]}`
+                + ` | zoom ${factor.toFixed(2)} | dpr ${seen.dpr} | rotfont ${seen.rootFont}`
+                + (tvPage ? ' | TV-läge' : ''));
+        }).catch(() => {});
+    }, 900);
 }
 
 // TV-appens inloggning ligger ett Enter bort från dess hemskärm (första valet
@@ -466,6 +483,47 @@ function openSignIn(win) {
 
 // Allt sker i ett fönster. Alex 19:25: två rutor sida vid sida gav dessutom
 // YouTubes TV-layout i ett smalt fönster, där texten krympte till otydlig.
+function handleExitVideo() {
+    if (!mainWindow) return;
+
+    console.log('[OmarchyTube] Main process handling exit video...');
+    mainWindow.webContents.executeJavaScript(`
+        try {
+            const p = document.querySelector('.html5-video-player');
+            if (p && typeof p.stopVideo === 'function') p.stopVideo();
+            const v = document.querySelector('video');
+            if (v) { v.pause(); v.currentTime = 0; }
+        } catch (e) {}
+    `).catch(() => {});
+
+    if (mainWindow.webContents.navigationHistory.canGoBack()) {
+        mainWindow.webContents.navigationHistory.goBack();
+    } else if (returnToGrid) {
+        loadBrowse();
+    } else {
+        mainWindow.loadURL(getUrlForMode(currentMode));
+    }
+    returnToGrid = false;
+
+    // Fallback: If still on watch page after 350ms, navigate to root URL
+    setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.executeJavaScript(`
+                (() => {
+                    const onWatch = !!document.querySelector('ytlr-watch-page, ytd-watch-flexy');
+                    const v = document.querySelector('video');
+                    const playing = !!v && !v.paused;
+                    return onWatch || playing;
+                })()
+            `).then(isWatching => {
+                if (isWatching) {
+                    loadBrowse();
+                }
+            }).catch(() => {});
+        }
+    }, 350);
+}
+
 function showPicker(win) {
     if (!win || win.isDestroyed()) return win;
     onBrowsePage = false;
@@ -524,47 +582,6 @@ function openProfile(id) {
 // gick bra så länge appen hade ett enda fönster — med ett fönster per profil
 // hade ipcMain.handle kastat på den andra registreringen.
 function registerIpc() {
-    function handleExitVideo() {
-        if (!mainWindow) return;
-
-        console.log('[OmarchyTube] Main process handling exit video...');
-        mainWindow.webContents.executeJavaScript(`
-            try {
-                const p = document.querySelector('.html5-video-player');
-                if (p && typeof p.stopVideo === 'function') p.stopVideo();
-                const v = document.querySelector('video');
-                if (v) { v.pause(); v.currentTime = 0; }
-            } catch (e) {}
-        `).catch(() => {});
-
-        if (mainWindow.webContents.canGoBack()) {
-            mainWindow.webContents.goBack();
-        } else if (returnToGrid) {
-            loadBrowse();
-        } else {
-            mainWindow.loadURL(getUrlForMode(currentMode));
-        }
-        returnToGrid = false;
-
-        // Fallback: If still on watch page after 350ms, navigate to root URL
-        setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.executeJavaScript(`
-                    (() => {
-                        const onWatch = !!document.querySelector('ytlr-watch-page, ytd-watch-flexy');
-                        const v = document.querySelector('video');
-                        const playing = !!v && !v.paused;
-                        return onWatch || playing;
-                    })()
-                `).then(isWatching => {
-                    if (isWatching) {
-                        loadBrowse();
-                    }
-                }).catch(() => {});
-            }
-        }, 350);
-    }
-
     ipcMain.on('omarchy-exit-video', () => {
         handleExitVideo();
     });

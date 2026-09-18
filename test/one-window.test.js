@@ -35,3 +35,17 @@ test("'closed' läser aldrig webContents, som redan är förstörd", () => {
         'webContents.id läses efter stängning — det kastar "Object has been destroyed"');
     assert.match(main, /const contentsId = win\.webContents\.id;/, 'id:t fångas inte upp före stängningen');
 });
+
+test('funktioner tangentbordet kallar ligger på modulnivå', () => {
+    // Mätt 2026-09-18: när IPC-blocket flyttades ut ur createWindow följde
+    // handleExitVideo med in i registerIpc, och Esc/Backspace svarade
+    // "ReferenceError: handleExitVideo is not defined" i stället för att lämna
+    // videon. En deklaration inuti en annan funktion syns inte för fönstret.
+    const at = (needle) => main.indexOf(needle);
+    const ipc = at('function registerIpc()');
+    for (const fn of ['handleExitVideo', 'loadBrowse', 'showPicker', 'fitView', 'openProfile']) {
+        const declared = at(`function ${fn}(`);
+        assert.ok(declared > 0, `${fn} deklareras inte alls`);
+        assert.ok(declared < ipc, `${fn} ligger inuti registerIpc och blir osynlig utifrån`);
+    }
+});

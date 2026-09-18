@@ -461,10 +461,12 @@
     applyLeanbackDensity();
 
     // --- Module 7: Key Hints on First Run ---
-    // En TV-app har inga menyer att upptäcka tangenterna i. Tipset visas en gång,
-    // och måste återinsättas med en klocka: TV-appen byter ut bodyns innehåll när
-    // den ritar om, och en nod som bara läggs in en gång försvinner då tyst
-    // (samma skäl som tillbaka-knappen har sin egen sekundklocka).
+    // En TV-app har inga menyer att upptäcka tangenterna i. Tipset visas en gång
+    // och försvinner vid första tangentryck eller efter tolv sekunder. Det måste
+    // återinsättas med en klocka (TV-appen ritar om body och tar då med sig noden;
+    // samma skäl som gör att tillbaka-knappen har sin egen sekundklocka), och
+    // klockan startar först när tipset faktiskt kan visas — inte vid sidladdning,
+    // för en långsam start åt annars upp de tolv sekunderna.
     const KEY_HINTS = [
         ['\u2190 \u2192 \u2191 \u2193', 'Move'],
         ['Enter', 'Select'],
@@ -473,7 +475,7 @@
         ['F11', 'Fullscreen'],
     ];
     const HINTS_MS = 12000;
-    let hintsDeadline = 0;
+    let hintsUntil = 0;
 
     function buildKeyHints() {
         const box = document.createElement('div');
@@ -494,24 +496,9 @@
         return box;
     }
 
-    function ensureKeyHints() {
-        if (!hintsDeadline) return;
-        if (Date.now() > hintsDeadline) {
-            // Tiden ute: ta bort tipset. Utan den här grenen stannade det kvar på
-            // skärmen för alltid om ingen tangent trycktes — mätt i den byggda
-            // appen, där tipset stod kvar efter tolv sekunder med flaggan osatt.
-            hideKeyHints();
-            return;
-        }
-        if (!document.body || document.getElementById('omarchy-key-hints')) return;
-        const box = buildKeyHints();
-        document.body.appendChild(box);
-        requestAnimationFrame(() => box.classList.add('show'));
-    }
-
     function hideKeyHints() {
-        hintsDeadline = 0;
         localStorage.setItem('omarchy-hints-shown', '1');
+        hintsUntil = 0;
         window.removeEventListener('keydown', hideKeyHints);
         const box = document.getElementById('omarchy-key-hints');
         if (!box) return;
@@ -519,12 +506,26 @@
         setTimeout(() => box.remove(), 400);
     }
 
-    if (localStorage.getItem('omarchy-hints-shown') !== '1') {
-        hintsDeadline = Date.now() + HINTS_MS;
+    function ensureKeyHints() {
+        const box = document.getElementById('omarchy-key-hints');
+        const done = localStorage.getItem('omarchy-hints-shown') === '1';
+        const expired = hintsUntil && Date.now() > hintsUntil;
+        if (done || expired) {
+            if (box) hideKeyHints();
+            return;
+        }
+        if (box || !document.body) return;
+        if (!hintsUntil) hintsUntil = Date.now() + HINTS_MS;
+        document.body.appendChild(buildKeyHints());
+        requestAnimationFrame(() => {
+            const b = document.getElementById('omarchy-key-hints');
+            if (b) b.classList.add('show');
+        });
         window.addEventListener('keydown', hideKeyHints);
-        setTimeout(ensureKeyHints, 1500);
-        setInterval(ensureKeyHints, 1000);
     }
+
+    setTimeout(ensureKeyHints, 1500);
+    setInterval(ensureKeyHints, 1000);
 
     // In-page keyboard handler for Escape, Backspace, and 'q'
     window.addEventListener('keydown', (e) => {

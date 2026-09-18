@@ -417,8 +417,10 @@ function fitView(win) {
         factor = Math.min(Math.max(width / TV_LAYOUT_WIDTH, 0.35), 2);
     }
     try {
+        // Bara setZoomFactor: setZoomLevel(0) betyder 100 % och nollställde
+        // faktorn i nästa andetag. Mätt i Alex logg 21:50 — raden sa zoom 0,49
+        // medan sidan fortfarande var 941 CSS-px bred.
         win.webContents.setZoomFactor(factor);
-        win.webContents.setZoomLevel(0);
     } catch (err) {
         console.warn('[OmarchyTube] Kunde inte sätta zoom:', err.message);
         return;
@@ -430,11 +432,15 @@ function fitView(win) {
         if (win.isDestroyed()) return;
         win.webContents.executeJavaScript(`(() => ({
             view: [innerWidth, innerHeight], dpr: devicePixelRatio,
+            visual: window.visualViewport ? Number(window.visualViewport.scale.toFixed(3)) : null,
             rootFont: getComputedStyle(document.documentElement).fontSize
         }))()`).then((seen) => {
             const bounds = win.getBounds();
-            console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | sidan säger ${seen.view[0]}x${seen.view[1]}`
-                + ` | zoom ${factor.toFixed(2)} | dpr ${seen.dpr} | rotfont ${seen.rootFont}`
+            const applied = win.webContents.getZoomFactor();
+            const expected = Math.round(bounds.width / (applied || 1));
+            console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | sidan ${seen.view[0]}x${seen.view[1]}`
+                + ` (väntat ${expected} brett) | zoom satt ${factor.toFixed(2)} / gäller ${applied.toFixed(2)}`
+                + ` | dpr ${seen.dpr} | visualViewport ${seen.visual} | rotfont ${seen.rootFont}`
                 + (tvPage ? ' | TV-läge' : ''));
         }).catch(() => {});
     }, 900);
@@ -638,6 +644,13 @@ function registerIpc() {
 
 app.whenReady().then(() => {
     registerIpc();
+
+    // Vulkan-varningen i Alex terminal kommer från Chromium och svarar inte på om
+    // Vulkan faktiskt är på. getGPUFeatureStatus() gör det, och compositing-raden
+    // är den som avgör om en delvis målad ruta är ett GPU-fel eller en layout.
+    const gpu = app.getGPUFeatureStatus();
+    console.log('[OmarchyTube] GPU: ' + ['vulkan', 'gpu_compositing', 'rasterization', 'video_decode']
+        .map((key) => `${key}=${gpu[key] || 'saknas'}`).join(', '));
 
     // Första skärmen är frågan, inte en tom ruta: vem skall titta? Svaret avgör
     // vilken Google-session resten av appen pratar med.

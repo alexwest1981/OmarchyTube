@@ -303,6 +303,10 @@
 
     // --- Module 4: 100% Window Fit (Responsive Full Canvas) ---
     function enforce100PercentFit() {
+        // Samma gräns som i styles.css: den här regeln hör till TV-appen. På
+        // skrivbordssidan finns sju #container och ingen av dem skall töjas ut.
+        if (!document.querySelector('ytlr-app')) return;
+
         const c = document.getElementById('container');
         const bg = document.getElementById('app-background');
         if (c) {

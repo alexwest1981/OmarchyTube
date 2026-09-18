@@ -45,32 +45,3 @@ test('the licence in package.json is the one the project ships', () => {
         'LICENSE ska vara MIT-licensen'
     );
 });
-
-test('sponsorblock category labels are the ones the API names', () => {
-    const injector = fs.readFileSync(path.join(ROOT, 'src/injector.js'), 'utf8');
-    const block = injector.match(/const categoryLabels = \{([\s\S]*?)\};/);
-    assert.ok(block, 'categoryLabels hittades inte i injector.js');
-
-    const labels = Object.fromEntries(
-        [...block[1].matchAll(/(\w+):\s*'([^']*)'/g)].map((m) => [m[1], m[2]])
-    );
-    // SponsorBlock:s egna kategorier och deras engelska namn
-    assert.deepStrictEqual(labels, {
-        sponsor: 'Sponsor',
-        intro: 'Intro',
-        outro: 'Outro',
-        selfpromo: 'Self Promotion',
-        interaction: 'Interaction Reminder',
-        music_offtopic: 'Non-Music Section',
-    });
-});
-
-test('user-facing chrome has no Swedish left', () => {
-    const injector = fs.readFileSync(path.join(ROOT, 'src/injector.js'), 'utf8');
-    const svenska = ['Ångra', 'Hoppade', 'Tillbaka', 'Prenumerera', 'Egen reklam', 'Icke-musik'];
-    const kvar = svenska.filter((ord) => injector.includes(ord));
-    assert.deepStrictEqual(
-        kvar, [],
-        `svenska kvar i gränssnittet: ${kvar.join(', ')} — README och metadata är engelska`
-    );
-});

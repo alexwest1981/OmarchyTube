@@ -1,155 +1,83 @@
-# 📺 OmarchyTube
+# OmarchyTube
 
-> A dedicated, full-screen optimized YouTube client for **Omarchy** and **Hyprland**, inspired by YouTube ReVanced and SmartTube.
+Asks **who is watching**, then opens YouTube for that person — in a browser
+window with its own Google session.
 
-[🇸🇪 Svenska](README.sv.md)
+That is the whole app. It asks, it opens, it closes itself.
 
-Designed to deliver a clean, distraction-free YouTube experience in a standalone Wayland window without browser bloat. Features seamless **QR Code sign-in**, multi-layer ad blocking, native **SponsorBlock**, and 100% responsive window fitting.
+## Why it is this small
 
----
+The first version tried to be the browser: its own video grid over YouTube's
+internal API, canned CSS injected into YouTube's pages, a "TV mode" with a
+spoofed SmartTV user agent, its own sign-in flow. Every part of that fought
+something we could not win:
 
-## ✨ Features
+* **Sign-in.** Google refuses the password form inside an embedded browser
+  (`Couldn't sign you in — This browser or app may not be secure`). Measured,
+  twice. In a real browser it just works.
+* **TV mode.** YouTube's TV app computes its text scale from the window width,
+  squared: a 941 px window gave a root font of 5.88 px against 24 px at 1920 —
+  a quarter of the picture, unreadable. YouTube's design, not a bug we can fix.
+* **The shell.** Our injected geometry rules (`#container` forced to 100vw/100vh)
+  hit YouTube's desktop page, which has **seven** elements with that id —
+  masthead, player, playlist panel — and left the page in a band at the top with
+  everything else clipped.
+* **Rendering.** Electron on Wayland gave `setZoomFactor(0.49)` a
+  `devicePixelRatio` of 0.49 instead of a page zoom, so the layout said 1920 CSS
+  px while the surface painted at window size.
 
-- 🏠 **Own Browse Grid (the app's home)**
-  - The app opens on its own grid: a keyboard-first wall of video cards built on YouTube's own data (InnerTube), not a wrapped webpage.
-  - <kbd>/</kbd> searches, arrows move, <kbd>Enter</kbd> plays. Playback opens YouTube's **desktop watch page**, so ad blocking, SponsorBlock and the floating back button all still apply.
-  - <kbd>F1</kbd> switches to YouTube's own view (TV or desktop, per mode); <kbd>Escape</kbd> or <kbd>Alt</kbd> + <kbd>Home</kbd> brings the grid back.
+Each of those is already solved in a browser, by people who do it for a living.
+So the app does the part that was actually ours: the question, and keeping the
+sessions apart. Every profile gets its own `--user-data-dir`, so signing in as
+someone else never touches your own feed, history or subscriptions.
 
-![The browse grid at 1920×1080](screenshots/browse-1920x1080.png)
+## Using it
 
-- 📱 **Seamless QR Code Sign-In (TV / Leanback Mode)**
-  - No risk of Google's *"This browser or app may not be secure"* error.
-  - Authenticates via Google's official **OAuth Device Flow**: simply scan the on-screen QR code with your phone camera or visit `youtube.com/activate`.
-  - Securely persists your session, subscriptions, history, and playlists.
+1. Launch **OmarchyTube** — the profile picker is the only window.
+2. <kbd>↵</kbd> on a profile opens that profile's browser window at
+   <kbd>youtube.com</kbd>. The launcher closes itself as soon as the browser is
+   up.
+3. Sign in once per profile, in that window. Google treats it as an ordinary
+   browser, because it is one.
+4. <kbd>N</kbd> adds a profile. <kbd>F2</kbd> switches the launcher between
+   desktop and TV mode (TV opens `youtube.com/tv` — for a big screen).
+   <kbd>Delete</kbd> twice removes a profile; its browser directory stays behind
+   for you to delete if the account should go too.
 
-- 🎛️ **Dual View Modes (Toggle instantly with <kbd>F2</kbd>)**
-  - **TV Mode (Default)**: YouTube Leanback interface optimized for full-bleed display, arrow-key navigation, remote controls, and QR authentication.
-  - **Desktop Mode**: Standard YouTube desktop web interface for classic mouse and keyboard browsing.
+```sh
+omarchy-tube            # the picker
+omarchy-tube --tv       # start in TV mode
+omarchy-tube --desktop  # start in desktop mode
+OMARCHYTUBE_BROWSER=chromium omarchy-tube   # a different browser
+```
 
-- 🛡️ **Multi-Layer Ad Blocking**
-  - **Network-Level**: Blocks requests to DoubleClick, Google AdServices, and YouTube ad tracking servers.
-  - **Cosmetic Filtering**: Removes sponsored banners, promotional sidebars, and recommendation clutter.
-  - **Video Skipping**: Instantly skips pre-roll and mid-roll video advertisements without countdown delays.
+## What it needs
 
-- ⚡ **Built-In SponsorBlock**
-  - Automatically detects and skips sponsored segments, intros, outros, interaction reminders, and self-promotions using the official SponsorBlock API.
-  - Segment highlight markers on the progress bar with an on-screen "Unskip" toast button.
+* **Electron** (the picker window) — `npm install`.
+* **A Chromium-family browser on `PATH`** — `brave` by default, override with
+  `OMARCHYTUBE_BROWSER`.
 
-- ↩️ **Floating Quick-Back Button & Video Exit**
-  - Floating **`[ ← Back ]`** button smoothly appears in the top-left corner on mouse movement while watching videos.
-  - Instantly exit playing videos and return to the grid via <kbd>Escape</kbd>, <kbd>Backspace</kbd>, or Mouse Back Button (Mouse 4).
+The browser is where YouTube lives; the launcher never loads a YouTube page
+itself and injects nothing anywhere.
 
-- 🪟 **Tailored for Omarchy & Hyprland**
-  - Native Wayland client (`--ozone-platform=wayland`).
-  - Hardware-accelerated video decoding (VA-API).
-  - Consistent window class (`StartupWMClass=OmarchyTube`) for easy Hyprland tiling, floating, and workspace rules.
-  - Eliminates letterboxing, ensuring 100% full window canvas fill.
+## Files
 
----
-
-## 🚀 Getting Started
-
-### Launching the App
-- **Application Launcher (Walker / Rofi / Super key)**:
-  Search for **OmarchyTube**.
-- **Terminal**:
-  ```bash
-  OmarchyTube
-  ```
-- **Launch directly in Desktop Mode**:
-  ```bash
-  OmarchyTube --desktop
-  ```
-
----
-
-## ⌨️ Controls & Shortcuts
-
-| Key / Mouse | Action |
+| File | What it is |
 |---|---|
-| <kbd>F1</kbd> | **Switch between the app's own grid and YouTube's own view** (TV or desktop, per mode) |
-| <kbd>/</kbd> | Focus the grid's search field |
-| <kbd>Arrow Keys</kbd> / <kbd>PageUp</kbd> / <kbd>PageDown</kbd> / <kbd>Home</kbd> / <kbd>End</kbd> | Move around the grid |
-| <kbd>Enter</kbd> | Play the selected card (opens YouTube's watch page) |
-| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | In a video: **exit it and return to the grid**. On the grid: **back to the home feed** |
-| Click **`[ ← Back ]`** button | **Floating exit button shown on mouse movement** |
-| Mouse Button 4 (Back) | Exit video / browser history back |
-| <kbd>F2</kbd> | **Toggle between TV Mode and Desktop Mode** |
-| <kbd>F3</kbd> | **Switch viewer** (the profile picker, in this window) |
-| <kbd>F4</kbd> | **Sign in in your browser** (opens yt.be/activate) |
-| <kbd>F11</kbd> | Toggle window fullscreen |
-| <kbd>Arrow Keys</kbd> + <kbd>Enter</kbd> | Navigate and select items in TV Mode |
-| <kbd>Space</kbd> / <kbd>k</kbd> | Play / Pause video |
-| <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Reload current page |
-| <kbd>Alt</kbd> + <kbd>Home</kbd> | Return to the grid |
+| `src/main.js` | the picker window, the IPC, and the launch — nothing else |
+| `src/profiles.js` | the profile list (`userData/profiles.json`), pure and tested |
+| `src/browser-launch.js` | the browser command per profile, pure and tested |
+| `src/profiles.html/.css/-page.js` | the "who is watching" screen |
+| `src/preload.js` | the renderer's entire surface: five profile channels |
 
----
+## Tests
 
-## 🔐 How Sign-In Works
-
-OmarchyTube asks **"Vem skall titta?"** (who is watching) before anything else.
-One profile is one Google session — its own feed, subscriptions, history and
-playlists, in its own session partition — so sharing the machine does not mean
-sharing recommendations.
-
-1. Launch **OmarchyTube**. The first screen is the profile picker, and it is the
-   app's only window: pick a profile with the arrow keys and <kbd>Enter</kbd>, or
-   press <kbd>N</kbd> to add one.
-2. A new profile opens **YouTube's TV sign-in** in that profile's session, and
-   the app presses the one key it takes to get there: the first thing on screen
-   is the **QR code and the eight-character code**. Scan it with your phone, or
-   press <kbd>F4</kbd> to open [yt.be/activate](https://yt.be/activate) in your
-   own browser and type the code there. Signing in on another device is what the
-   device flow is for, and the account still lands in this profile's session
-   because it is this app that asked for the code.
-   Not the password form, and that is deliberate: measured 2026-09-18, Google
-   answers an embedded browser with *"Couldn't sign you in — This browser or app
-   may not be secure"*.
-3. Once signed in, the profile opens straight onto YouTube in the mode you left
-   it in: <kbd>F2</kbd> switches between TV mode (`youtube.com/tv`, the full
-   ten-foot experience) and desktop mode (`youtube.com`).
-4. <kbd>F1</kbd> shows the app's own grid inside that same profile. Its requests
-   run through the profile's session, so the home feed shown there is the one
-   the account has curated.
-5. <kbd>F3</kbd> brings the picker back **in the same window**, and
-   <kbd>Esc</kbd> in the picker goes back to the profile. Switching to a
-   *different* profile swaps the session, which Chromium only allows on a new
-   window — so the window is replaced and the old one closed. One window on
-   screen either way, in the same place on your desktop.
-
-The picker lives in `userData/profiles.json`; the accounts live in Chromium's
-own session partitions (`persist:omarchy-tube-<id>`) and are removed with the
-profile.
-
-## 🛠️ Installation from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/alexwest1981/OmarchyTube.git
-cd OmarchyTube
-
-# Install dependencies
-npm install
-
-# Run application
-npm start
+```sh
+npm test
 ```
 
-### System Desktop Integration
-To register the desktop application and CLI shortcut on Arch Linux / Omarchy:
-
-```bash
-# Symlink executable to user bin
-ln -sf "$(pwd)/bin/omarchy-tube" ~/.local/bin/OmarchyTube
-
-# Install desktop entry
-mkdir -p ~/.local/share/applications
-cp OmarchyTube.desktop ~/.local/share/applications/
-update-desktop-database ~/.local/share/applications/
-```
-
----
-
-## 📜 License
-
-MIT License. Designed with ❤️ for the Omarchy community.
+23 tests: the profile rules (ids must survive being directory names, two
+profiles may never share one), the browser command (a profile always gets its
+own directory, the URL follows the mode), the IPC channels (every `invoke` has
+a `handle`), and one architecture test that fails if the deleted layer — an
+injector, an embedded YouTube page, a spoofed user agent — ever comes back.

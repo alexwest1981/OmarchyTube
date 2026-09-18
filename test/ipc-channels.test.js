@@ -1,4 +1,5 @@
-// Bryggan och huvudprocessen måste tala om samma kanaler.
+// Bryggan och huvudprocessen måste tala om samma kanaler. Efter rivningen
+// 2026-09-18 går allt över invoke/handle — ingenting skickas enkelriktat.
 //
 // Mätt skäl: fönstret per profil gjorde att registreringen flyttades ut i
 // registerIpc(), och en kanal som byter namn på ena sidan fångas inte av något
@@ -20,13 +21,6 @@ test('varje invoke i preload har en handle i main', () => {
     const handled = handlers(read('main.js'), 'handle');
     assert.ok(invoked.length > 0, 'hittade inga invoke-anrop');
     assert.deepStrictEqual(invoked.filter((c) => !handled.includes(c)), []);
-});
-
-test('varje send i preload har en on i main', () => {
-    const sent = calls(read('preload.js'), 'send');
-    const listened = handlers(read('main.js'), 'on');
-    assert.ok(sent.length > 0, 'hittade inga send-anrop');
-    assert.deepStrictEqual(sent.filter((c) => !listened.includes(c)), []);
 });
 
 test('ingen kanal registreras två gånger i main', () => {

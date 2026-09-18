@@ -1,108 +1,82 @@
-# 📺 OmarchyTube (ReVanced för Omarchy)
+# OmarchyTube
 
-[🇬🇧 English version](README.md)
+Frågar **vem som skall titta** och öppnar YouTube för den personen — i ett
+webbläsarfönster med egen Google-session.
 
-En dedikerad, helskärmsoptimerad YouTube-applikation för **Omarchy** och **Hyprland**, inspirerad av YouTube ReVanced och SmartTube.
+Det är hela appen. Den frågar, den öppnar, den stänger sig.
 
-Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsarkonst, med stöd för smidig **QR-kodsinloggning**, automatisk annonsblockering och **SponsorBlock**.
+## Varför den är så liten
 
----
+Första versionen försökte vara webbläsaren: eget videorutnät mot YouTubes
+interna API, egen CSS injicerad i YouTubes sidor, ett "TV-läge" med förfalskad
+SmartTV-agent och egen inloggning. Varje del av det slogs mot något vi inte kan
+vinna:
 
-## ✨ Funktioner
+* **Inloggningen.** Google vägrar lösenordsformuläret inuti en inbäddad
+  webbläsare (`Couldn't sign you in — This browser or app may not be secure`).
+  Mätt, två gånger. I en riktig webbläsare fungerar det.
+* **TV-läget.** YouTubes TV-app räknar sin textskala ur fönsterbredden, i
+  kvadrat: ett fönster på 941 px gav rotfont 5,88 px mot 24 px vid 1920 — en
+  fjärdedels bild, oläsbar. YouTubes design, inte en bugg vi kan laga.
+* **Appens skal.** Våra injicerade geometriregler (`#container` tvingad till
+  100vw/100vh) träffade YouTubes skrivbordssida, som har **sju** element med det
+  id:t — masthead, spelare, spellista — och la hela sidan i ett band högst upp
+  med resten bortklippt.
+* **Renderingen.** Electron på Wayland gjorde `setZoomFactor(0.49)` till ett
+  `devicePixelRatio` på 0,49 i stället för en sidzoom: layouten sa 1920 CSS-px
+  medan ytan målades i fönstrets storlek.
 
-- 🏠 **Eget rutnät (appens startsida)**
-  - Appen öppnar i sitt eget rutnät: en tangentbordsstyrd vägg av videokort byggd på YouTubes egna data (InnerTube), inte en inbäddad webbsida.
-  - <kbd>/</kbd> söker, pilarna flyttar, <kbd>Enter</kbd> spelar upp. Uppspelningen sker på YouTubes **vanliga tittarsida**, så annonsblockering, SponsorBlock och den flytande tillbaka-knappen gäller fortfarande.
-  - <kbd>F1</kbd> växlar till YouTubes egen vy (TV eller desktop, beroende på läge); <kbd>Escape</kbd> eller <kbd>Alt</kbd> + <kbd>Home</kbd> tar dig tillbaka till rutnätet.
+Allt det där är redan löst i en webbläsare, av folk som gör det till yrke. Kvar
+är det som faktiskt var vårt: frågan, och att hålla sessionerna åtskilda. Varje
+profil får sin egen `--user-data-dir`, så att logga in som någon annan aldrig
+rör ditt eget flöde, din historik eller dina prenumerationer.
 
-![Rutnätet i 1920×1080](screenshots/browse-1920x1080.png)
+## Att använda den
 
-- 📱 **Säker QR-kodsinloggning (TV/Leanback-läge)**:
-  - Ingen risk för Googles *"This browser or app may not be secure"*.
-  - Logga in med Googles officiella **OAuth Device Flow**: skanna QR-koden med mobilen eller gå till `youtube.com/activate`.
-- 🎛️ **Två visningslägen (Växla med <kbd>F2</kbd>)**:
-  - **TV-läge (Standard)**: YouTubes Leanback-gränssnitt optimerat för 100% ren helskärm, piltangenter och QR-inloggning.
-  - **Desktop-läge**: YouTubes vanliga webbgränssnitt för klassisk musnavigation.
-- 🛡️ **Annonsfritt på flera nivåer**:
-  - Nätverksblockering av Googles och YouTubes annons- och spårningsservrar.
-  - Kosmetisk rensning av sponsringsrutor och banners.
-  - Omedelbar automatisk överhoppning av eventuella videoreklaminslag.
-- ⚡ **SponsorBlock**:
-  - Hoppar automatiskt över sponsringsinslag, intron, outron och egen reklam via SponsorBlocks API.
-  - Visuella markeringar på tidslinjen och klickbar "Ångra"-knapp.
-- 🪟 **Byggd för Omarchy & Hyprland**:
-  - Körs med native Wayland (`--ozone-platform=wayland`) och hårdvaruacceleration.
-  - Fönsterklass: `OmarchyTube`.
+1. Starta **OmarchyTube** — profilväljaren är det enda fönstret.
+2. <kbd>↵</kbd> på en profil öppnar den profilens webbläsarfönster på
+   <kbd>youtube.com</kbd>. Startaren stänger sig själv så snart webbläsaren är uppe.
+3. Logga in en gång per profil, i det fönstret. Google behandlar det som en
+   vanlig webbläsare, eftersom det är en.
+4. <kbd>N</kbd> lägger till en profil. <kbd>F2</kbd> växlar mellan skrivbords-
+   och TV-läge (TV öppnar `youtube.com/tv` — för en stor skärm).
+   <kbd>Delete</kbd> två gånger tar bort en profil; webbläsarkatalogen ligger
+   kvar om du vill ta bort kontot också.
 
----
+```sh
+omarchy-tube            # väljaren
+omarchy-tube --tv       # starta i TV-läge
+omarchy-tube --desktop  # starta i skrivbordsläge
+OMARCHYTUBE_BROWSER=chromium omarchy-tube   # annan webbläsare
+```
 
-## 🚀 Starta appen
+## Vad den behöver
 
-1. **Från startmenyn (Super-tangenten / Walker / Rofi)**:
-   Sök efter **OmarchyTube**.
-2. **Från terminalen**:
-   ```bash
-   OmarchyTube
-   ```
-3. **Starta direkt i skrivbordsläge**:
-   ```bash
-   OmarchyTube --desktop
-   ```
+* **Electron** (väljarfönstret) — `npm install`.
+* **En Chromium-webbläsare i PATH** — `brave` som standard, byt med
+  `OMARCHYTUBE_BROWSER`.
 
----
+Webbläsaren är där YouTube bor; startaren laddar aldrig en YouTubesida själv och
+injicerar ingenting någonstans.
 
-## ⌨️ Tangentbordskontroller
+## Filer
 
-| Tangent / Mus | Funktion |
+| Fil | Vad den är |
 |---|---|
-| <kbd>F1</kbd> | **Växla mellan appens eget rutnät och YouTubes egen vy** (TV eller desktop, beroende på läge) |
-| <kbd>/</kbd> | Fokusera rutnätets sökfält |
-| <kbd>Piltangenter</kbd> / <kbd>PageUp</kbd> / <kbd>PageDown</kbd> / <kbd>Home</kbd> / <kbd>End</kbd> | Flytta dig i rutnätet |
-| <kbd>Enter</kbd> | Spela upp det markerade kortet (öppnar YouTubes tittarsida) |
-| <kbd>Escape</kbd> / <kbd>Backspace</kbd> / <kbd>q</kbd> | I ett videoklipp: **lämna videon och gå tillbaka till rutnätet**. I rutnätet: **tillbaka till hemskärmen** |
-| Klick på `[ ← Tillbaka ]` i hörnet | **Flytande tillbaka-knapp som visas vid musrörelse** |
-| Musknapp 4 (Bakåt) | Backa ur video / historik |
-| <kbd>F11</kbd> | Växla fönstrets helskärmsläge |
-| <kbd>F2</kbd> | **Växla direkt mellan TV-läge och Desktop-läge** |
-| <kbd>F3</kbd> | **Byt tittare** (profilväljaren, i samma fönster) |
-| <kbd>F4</kbd> | **Logga in i webbläsaren** (öppnar yt.be/activate) |
-| <kbd>Pilar</kbd> + <kbd>Enter</kbd> | Navigera och välj i TV-läget |
-| <kbd>Mellanslag</kbd> / <kbd>k</kbd> | Spela / Pausa |
-| <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Ladda om sidan |
-| <kbd>Alt</kbd> + <kbd>Home</kbd> | Tillbaka till rutnätet |
+| `src/main.js` | väljarfönstret, IPC:n och starten — inget annat |
+| `src/profiles.js` | profillistan (`userData/profiles.json`), ren och provad |
+| `src/browser-launch.js` | webbläsarkommandot per profil, rent och provat |
+| `src/profiles.html/.css/-page.js` | skärmen "Vem skall titta?" |
+| `src/preload.js` | rendererns hela yta: fem profilkanaler |
 
----
+## Prov
 
-## 🔐 Hur inloggningen fungerar
+```sh
+npm test
+```
 
-OmarchyTube frågar **"Vem skall titta?"** innan något annat. En profil är en
-Google-session — eget flöde, egna prenumerationer, egen historik och egna listor,
-i sin egen partition — så att låna ut datorn inte betyder att låna ut sina
-rekommendationer.
-
-1. Starta **OmarchyTube**. Första skärmen är profilväljaren, och den är appens
-   enda fönster: välj med piltangenterna och <kbd>Enter</kbd>, eller tryck
-   <kbd>N</kbd> för att lägga till en profil.
-2. En ny profil öppnar **YouTubes TV-inloggning** i den profilens session, och
-   appen trycker själv det enda tangenttryck som krävs: det första som möter dig
-   är **QR-koden och de åtta tecknen**. Skanna med mobilen, eller tryck
-   <kbd>F4</kbd> för att öppna [yt.be/activate](https://yt.be/activate) i din egen
-   webbläsare och skriv koden där. Att logga in på en annan enhet är vad
-   device-flödet är till för, och kontot hamnar i den här profilens session ändå
-   — det är appen som bad om koden.
-   Inte lösenordsformuläret, och det är med flit: mätt 2026-09-18 svarar Google
-   en inbäddad webbläsare med *"Couldn't sign you in — This browser or app may
-   not be secure"*.
-3. När du är inloggad öppnas profilen direkt på YouTube i det läge du lämnade:
-   <kbd>F2</kbd> växlar mellan TV-läget (`youtube.com/tv`, hela tiofotsupplevelsen)
-   och skrivbordsläget (`youtube.com`).
-4. <kbd>F1</kbd> visar appens eget rutnät i samma profil. Anropen går genom
-   profilens session, så hemflödet där är det kontot har kurerat.
-5. <kbd>F3</kbd> tar tillbaka väljaren **i samma fönster**, och <kbd>Esc</kbd> i
-   väljaren går tillbaka till profilen. Att byta till en *annan* profil byter
-   session, vilket Chromium bara tillåter i ett nytt fönster — rutan ersätts
-   alltså och den gamla stängs. Ett fönster på skärmen, på samma plats.
-
-Profilerna ligger i `userData/profiles.json`; kontona ligger i Chromiums egna
-session-partitioner (`persist:omarchy-tube-<id>`) och försvinner med profilen.
-
+23 prov: profilreglerna (id:n måste tåla att bli katalognamn, två profiler får
+aldrig dela katalog), webbläsarkommandot (varje profil får sin egen katalog,
+adressen följer läget), IPC-kanalerna (varje `invoke` har en `handle`), och ett
+arkitekturprov som fäller om det rivna lagret — en injektor, en inbäddad
+YouTubesida, en förfalskad webbläsaridentitet — skulle komma tillbaka.

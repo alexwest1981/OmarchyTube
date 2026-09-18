@@ -75,7 +75,8 @@ Designed to deliver a clean, distraction-free YouTube experience in a standalone
 | Click **`[ ← Back ]`** button | **Floating exit button shown on mouse movement** |
 | Mouse Button 4 (Back) | Exit video / browser history back |
 | <kbd>F2</kbd> | **Toggle between TV Mode and Desktop Mode** |
-| <kbd>F3</kbd> | **Switch viewer** (open the profile picker) |
+| <kbd>F3</kbd> | **Switch viewer** (the profile picker, in this window) |
+| <kbd>F4</kbd> | **Sign in in your browser** (opens yt.be/activate) |
 | <kbd>F11</kbd> | Toggle window fullscreen |
 | <kbd>Arrow Keys</kbd> + <kbd>Enter</kbd> | Navigate and select items in TV Mode |
 | <kbd>Space</kbd> / <kbd>k</kbd> | Play / Pause video |
@@ -91,25 +92,30 @@ One profile is one Google session — its own feed, subscriptions, history and
 playlists, in its own session partition — so sharing the machine does not mean
 sharing recommendations.
 
-1. Launch **OmarchyTube**. The first screen is the profile picker, not a video
-   page: pick a profile with the arrow keys and <kbd>Enter</kbd>, or press
-   <kbd>N</kbd> to add one.
+1. Launch **OmarchyTube**. The first screen is the profile picker, and it is the
+   app's only window: pick a profile with the arrow keys and <kbd>Enter</kbd>, or
+   press <kbd>N</kbd> to add one.
 2. A new profile opens **YouTube's TV sign-in** in that profile's session, and
    the app presses the one key it takes to get there: the first thing on screen
    is the **QR code and the eight-character code**. Scan it with your phone, or
-   open [yt.be/activate](https://yt.be/activate) and type the code.
+   press <kbd>F4</kbd> to open [yt.be/activate](https://yt.be/activate) in your
+   own browser and type the code there. Signing in on another device is what the
+   device flow is for, and the account still lands in this profile's session
+   because it is this app that asked for the code.
    Not the password form, and that is deliberate: measured 2026-09-18, Google
    answers an embedded browser with *"Couldn't sign you in — This browser or app
-   may not be secure"*. The QR route is the one Google opens for a TV client,
-   and it is the one that puts the account inside the profile's own session.
+   may not be secure"*.
 3. Once signed in, the profile opens straight onto YouTube in the mode you left
    it in: <kbd>F2</kbd> switches between TV mode (`youtube.com/tv`, the full
    ten-foot experience) and desktop mode (`youtube.com`).
 4. <kbd>F1</kbd> shows the app's own grid inside that same profile. Its requests
    run through the profile's session, so the home feed shown there is the one
    the account has curated.
-5. <kbd>F3</kbd> brings the picker back to switch viewer. Each profile keeps its
-   own window, so switching is a focus change, not a reload.
+5. <kbd>F3</kbd> brings the picker back **in the same window**, and
+   <kbd>Esc</kbd> in the picker goes back to the profile. Switching to a
+   *different* profile swaps the session, which Chromium only allows on a new
+   window — so the window is replaced and the old one closed. One window on
+   screen either way, in the same place on your desktop.
 
 The picker lives in `userData/profiles.json`; the accounts live in Chromium's
 own session partitions (`persist:omarchy-tube-<id>`) and are removed with the

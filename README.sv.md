@@ -64,7 +64,8 @@ Utvecklad för att ge en ren helskärmsupplevelse i eget fönster utan webbläsa
 | Musknapp 4 (Bakåt) | Backa ur video / historik |
 | <kbd>F11</kbd> | Växla fönstrets helskärmsläge |
 | <kbd>F2</kbd> | **Växla direkt mellan TV-läge och Desktop-läge** |
-| <kbd>F3</kbd> | **Byt tittare** (öppnar profilväljaren) |
+| <kbd>F3</kbd> | **Byt tittare** (profilväljaren, i samma fönster) |
+| <kbd>F4</kbd> | **Logga in i webbläsaren** (öppnar yt.be/activate) |
 | <kbd>Pilar</kbd> + <kbd>Enter</kbd> | Navigera och välj i TV-läget |
 | <kbd>Mellanslag</kbd> / <kbd>k</kbd> | Spela / Pausa |
 | <kbd>Ctrl</kbd> + <kbd>R</kbd> / <kbd>F5</kbd> | Ladda om sidan |
@@ -79,24 +80,28 @@ Google-session — eget flöde, egna prenumerationer, egen historik och egna lis
 i sin egen partition — så att låna ut datorn inte betyder att låna ut sina
 rekommendationer.
 
-1. Starta **OmarchyTube**. Första skärmen är profilväljaren, inte en videosida:
-   välj med piltangenterna och <kbd>Enter</kbd>, eller tryck <kbd>N</kbd> för att
-   lägga till en profil.
+1. Starta **OmarchyTube**. Första skärmen är profilväljaren, och den är appens
+   enda fönster: välj med piltangenterna och <kbd>Enter</kbd>, eller tryck
+   <kbd>N</kbd> för att lägga till en profil.
 2. En ny profil öppnar **YouTubes TV-inloggning** i den profilens session, och
    appen trycker själv det enda tangenttryck som krävs: det första som möter dig
-   är **QR-koden och de åtta tecknen**. Skanna med mobilen, eller öppna
-   [yt.be/activate](https://yt.be/activate) och skriv koden.
+   är **QR-koden och de åtta tecknen**. Skanna med mobilen, eller tryck
+   <kbd>F4</kbd> för att öppna [yt.be/activate](https://yt.be/activate) i din egen
+   webbläsare och skriv koden där. Att logga in på en annan enhet är vad
+   device-flödet är till för, och kontot hamnar i den här profilens session ändå
+   — det är appen som bad om koden.
    Inte lösenordsformuläret, och det är med flit: mätt 2026-09-18 svarar Google
    en inbäddad webbläsare med *"Couldn't sign you in — This browser or app may
-   not be secure"*. QR-vägen är den Google öppnar för en TV-klient, och den som
-   lägger kontot i profilens egen session.
+   not be secure"*.
 3. När du är inloggad öppnas profilen direkt på YouTube i det läge du lämnade:
    <kbd>F2</kbd> växlar mellan TV-läget (`youtube.com/tv`, hela tiofotsupplevelsen)
    och skrivbordsläget (`youtube.com`).
 4. <kbd>F1</kbd> visar appens eget rutnät i samma profil. Anropen går genom
    profilens session, så hemflödet där är det kontot har kurerat.
-5. <kbd>F3</kbd> tar tillbaka väljaren så du kan byta tittare. Varje profil har
-   sitt eget fönster, så ett byte är ett fokusbyte, inte en omladdning.
+5. <kbd>F3</kbd> tar tillbaka väljaren **i samma fönster**, och <kbd>Esc</kbd> i
+   väljaren går tillbaka till profilen. Att byta till en *annan* profil byter
+   session, vilket Chromium bara tillåter i ett nytt fönster — rutan ersätts
+   alltså och den gamla stängs. Ett fönster på skärmen, på samma plats.
 
 Profilerna ligger i `userData/profiles.json`; kontona ligger i Chromiums egna
 session-partitioner (`persist:omarchy-tube-<id>`) och försvinner med profilen.

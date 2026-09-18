@@ -19,7 +19,8 @@ try {
             list: () => ipcRenderer.invoke('omarchy-profiles:list'),
             add: (name) => ipcRenderer.invoke('omarchy-profiles:add', name),
             remove: (id) => ipcRenderer.invoke('omarchy-profiles:remove', id),
-            pick: (id) => ipcRenderer.invoke('omarchy-profiles:pick', id)
+            pick: (id) => ipcRenderer.invoke('omarchy-profiles:pick', id),
+            current: () => ipcRenderer.invoke('omarchy-profiles:current')
         }
     });
 } catch (err) {

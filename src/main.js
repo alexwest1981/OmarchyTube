@@ -46,6 +46,9 @@ const configuredPartitions = new Set();
 const windowProfiles = new Map();
 const profilesFile = path.join(app.getPath('userData'), 'profiles.json');
 const pickerPage = path.join(__dirname, 'profiles.html');
+// Startfönstret (väljaren) behöver ingen session alls — men ett fönster måste ha
+// en, och den här rör inget konto.
+const PICKER_PARTITION = 'persist:omarchy-picker';
 const stateFile = path.join(app.getPath('userData'), 'window-state.json');
 
 function loadWindowState() {
@@ -164,13 +167,14 @@ function switchMode(newMode) {
     console.log(`[OmarchyTube] Switched mode to: ${currentMode}`);
 }
 
+// profile === null betyder startfönstret: samma ruta, men väljaren i den.
 function createWindow(profile) {
     const windowState = loadWindowState();
-    const customSession = session.fromPartition(partitionFor(profile.id));
+    const customSession = session.fromPartition(profile ? partitionFor(profile.id) : PICKER_PARTITION);
 
     // onBeforeRequest/onBeforeSendHeaders sätts en gång per partition: att göra
     // det igen på samma session hade gett dubbla lyssnare.
-    if (!configuredPartitions.has(profile.id)) {
+    if (profile && !configuredPartitions.has(profile.id)) {
         configureSession(customSession);
         configuredPartitions.add(profile.id);
     }
@@ -178,7 +182,7 @@ function createWindow(profile) {
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
 
     const win = new BrowserWindow({
-        title: `OmarchyTube — ${profile.name}`,
+        title: profile ? `OmarchyTube — ${profile.name}` : 'Vem skall titta? — OmarchyTube',
         width: windowState.width || 1280,
         height: windowState.height || 800,
         minWidth: 640,
@@ -198,8 +202,14 @@ function createWindow(profile) {
     });
 
     mainWindow = win;
-    profileWindows.set(profile.id, win);
-    windowProfiles.set(win.webContents.id, profile.id);
+    // webContents.id fångas här: efter 'closed' är webContents förstörd, och att
+    // läsa .id då kastar "Object has been destroyed" — det var felet som mötte
+    // Alex när han stängde en ruta.
+    const contentsId = win.webContents.id;
+    if (profile) {
+        profileWindows.set(profile.id, win);
+        windowProfiles.set(contentsId, profile.id);
+    }
     // Allt som redan pekar på mainWindow (tangenter, injektorn, sparat
     // fönsterläge) följer den ruta användaren är i.
     win.on('focus', () => { mainWindow = win; });
@@ -237,25 +247,11 @@ function createWindow(profile) {
         injectResources(win.webContents);
     });
 
-    // Inloggad? Då är det här hela YouTube: flödet kontot kurerat genom åren,
-    // prenumerationerna, historiken, listorna. Utloggad? Då tar vi TV-lägets
-    // QR-väg — skrivbordssidans e-postformulär svarar Google "This browser or
-    // app may not be secure" i en inbäddad webbläsare (mätt 2026-09-18).
-    // Partitionskakan avgör vilket svar som gäller den här profilen.
-    customSession.cookies.get({ domain: '.youtube.com' })
-        .then((cookies) => {
-            const plan = planForSession(cookies, currentMode);
-            applyMode(plan.mode);
-            if (plan.autoSignIn) {
-                openSignIn(win);
-            } else {
-                win.loadURL(plan.url);
-            }
-        })
-        .catch((err) => {
-            console.warn('[OmarchyTube] Kunde inte läsa profilens kakor:', err);
-            win.loadURL('https://www.youtube.com/tv');
-        });
+    if (profile) {
+        startWithProfile(win, profile, customSession);
+    } else {
+        showPicker(win);
+    }
 
     // Handle external links
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -293,9 +289,17 @@ function createWindow(profile) {
             event.preventDefault();
         }
 
-        // Byt tittare: F3
+        // Byt tittare: F3 visar väljaren i den här rutan.
         if (input.key === 'F3' && input.type === 'keyDown') {
-            createPickerWindow();
+            showPicker(mainWindow);
+            event.preventDefault();
+        }
+
+        // Logga in i webbläsaren: F4 öppnar yt.be/activate, där koden från
+        // TV-skärmen skrivs in. Kontot hamnar i den här profilens session ändå,
+        // eftersom det är appen som bad om koden.
+        if (input.key === 'F4' && input.type === 'keyDown') {
+            shell.openExternal('https://yt.be/activate');
             event.preventDefault();
         }
 
@@ -380,8 +384,8 @@ function createWindow(profile) {
     });
 
     win.on('closed', () => {
-        profileWindows.delete(profile.id);
-        windowProfiles.delete(win.webContents.id);
+        if (profile) profileWindows.delete(profile.id);
+        windowProfiles.delete(contentsId);
         if (mainWindow === win) mainWindow = null;
     });
 }
@@ -427,61 +431,60 @@ function openSignIn(win) {
     win.loadURL('https://www.youtube.com/tv');
 }
 
-// Väljaren: en liten ruta med en uppgift. Egen partition, så den inte delar
-// kaka med något konto.
-function createPickerWindow() {
-    if (pickerWindow && !pickerWindow.isDestroyed()) {
-        pickerWindow.show();
-        pickerWindow.focus();
-        return pickerWindow;
-    }
+// Allt sker i ett fönster. Alex 19:25: två rutor sida vid sida gav dessutom
+// YouTubes TV-layout i ett smalt fönster, där texten krympte till otydlig.
+function showPicker(win) {
+    if (!win || win.isDestroyed()) return win;
+    onBrowsePage = false;
+    returnToGrid = false;
+    win.setTitle('Vem skall titta? — OmarchyTube');
+    win.loadFile(pickerPage);
+    return win;
+}
 
-    const iconPath = path.join(__dirname, 'assets', 'icon.png');
-    pickerWindow = new BrowserWindow({
-        width: 1000,
-        height: 660,
-        minWidth: 720,
-        minHeight: 520,
-        title: 'Vem skall titta? — OmarchyTube',
-        backgroundColor: '#0b0b0d',
-        icon: fs.existsSync(iconPath) ? iconPath : undefined,
-        autoHideMenuBar: true,
-        webPreferences: {
-            session: session.fromPartition('persist:omarchy-picker'),
-            preload: path.join(__dirname, 'preload.js'),
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: false
-        }
-    });
-
-    pickerWindow.loadFile(pickerPage);
-    pickerWindow.on('closed', () => { pickerWindow = null; });
-
-    // Esc stänger väljaren bara när det redan finns en profilruta att gå
-    // tillbaka till — annars vore appen tom.
-    pickerWindow.webContents.on('before-input-event', (event, input) => {
-        if (input.key === 'Escape' && input.type === 'keyDown' && mainWindow) {
-            pickerWindow.close();
-            event.preventDefault();
-        }
-    });
-
-    return pickerWindow;
+// Inloggad? Då är det här hela YouTube: flödet kontot kurerat genom åren,
+// prenumerationerna, historiken, listorna. Utloggad? Då tar vi TV-lägets QR-väg
+// — skrivbordssidans e-postformulär svarar Google "This browser or app may not
+// be secure" i en inbäddad webbläsare (mätt 2026-09-18). Partitionskakan avgör
+// vilket svar som gäller den här profilen. Exporterad för openProfile.
+function startWithProfile(win, profile, profileSession) {
+    const target = profileSession || session.fromPartition(partitionFor(profile.id));
+    target.cookies.get({ domain: '.youtube.com' })
+        .then((cookies) => {
+            const plan = planForSession(cookies, currentMode);
+            applyMode(plan.mode);
+            if (plan.autoSignIn) {
+                openSignIn(win);
+            } else {
+                win.loadURL(plan.url);
+            }
+        })
+        .catch((err) => {
+            console.warn('[OmarchyTube] Kunde inte läsa profilens kakor:', err);
+            win.loadURL('https://www.youtube.com/tv');
+        });
 }
 
 function openProfile(id) {
     const profile = findProfile(readProfiles(profilesFile), id);
     if (!profile) return null;
 
-    const existing = profileWindows.get(profile.id);
-    if (existing && !existing.isDestroyed()) {
-        if (existing.isMinimized()) existing.restore();
-        existing.show();
-        existing.focus();
-        return existing;
+    const current = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    const currentId = current ? windowProfiles.get(current.webContents.id) : null;
+
+    // Samma profil: rutan har redan rätt session, så vi går bara tillbaka till
+    // YouTube i den.
+    if (current && currentId === profile.id) {
+        startWithProfile(current, profile);
+        return current;
     }
-    return createWindow(profile);
+
+    // Annan profil: partitionen sitter på fönstret och går inte att byta, så det
+    // blir ett nytt fönster i samma storlek och det gamla stängs — ett fönster
+    // kvar, samma ruta på skärmen.
+    const next = createWindow(profile);
+    if (current && !current.isDestroyed()) current.close();
+    return next;
 }
 
 // Allt som bara får registreras en gång. Låg tidigare inuti createWindow, vilket
@@ -577,6 +580,10 @@ function registerIpc() {
         openProfile(String(id));
         return true;
     });
+
+    // Vilken profil rutan visar, om någon — väljaren använder det för Esc
+    // (tillbaka till YouTube i samma fönster).
+    ipcMain.handle('omarchy-profiles:current', (event) => windowProfiles.get(event.sender.id) || null);
 }
 
 app.whenReady().then(() => {
@@ -584,11 +591,11 @@ app.whenReady().then(() => {
 
     // Första skärmen är frågan, inte en tom ruta: vem skall titta? Svaret avgör
     // vilken Google-session resten av appen pratar med.
-    createPickerWindow();
+    createWindow(null);
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            createPickerWindow();
+            createWindow(null);
         }
     });
 });

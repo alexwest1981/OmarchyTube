@@ -143,6 +143,12 @@
             event.preventDefault();
         }
         if (event.key === 'Enter') { choose(); event.preventDefault(); }
+        if (event.key === 'Escape') {
+            // Rutan kan redan visa en profil (F3 hit); då är Esc vägen tillbaka
+            // till YouTube i samma fönster.
+            bridge.current().then((id) => { if (id) bridge.pick(id); });
+            event.preventDefault();
+        }
         if (event.key.toLowerCase() === 'n') { openForm(); event.preventDefault(); }
         if (event.key === 'Delete' && profiles[index]) {
             if (confirmingRemoval === profiles[index].id) {

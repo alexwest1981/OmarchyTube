@@ -94,11 +94,14 @@ sharing recommendations.
 1. Launch **OmarchyTube**. The first screen is the profile picker, not a video
    page: pick a profile with the arrow keys and <kbd>Enter</kbd>, or press
    <kbd>N</kbd> to add one.
-2. A new profile opens **YouTube's own page** in that profile's session, with
-   YouTube's normal sign-in — email, password, two-factor, the works. (The TV
-   app's QR-code route is still available one key away in TV mode, but it is no
-   longer the way in, and there is no dead end if you would rather type your
-   address.)
+2. A new profile opens **YouTube's TV sign-in** in that profile's session, and
+   the app presses the one key it takes to get there: the first thing on screen
+   is the **QR code and the eight-character code**. Scan it with your phone, or
+   open [yt.be/activate](https://yt.be/activate) and type the code.
+   Not the password form, and that is deliberate: measured 2026-09-18, Google
+   answers an embedded browser with *"Couldn't sign you in — This browser or app
+   may not be secure"*. The QR route is the one Google opens for a TV client,
+   and it is the one that puts the account inside the profile's own session.
 3. Once signed in, the profile opens straight onto YouTube in the mode you left
    it in: <kbd>F2</kbd> switches between TV mode (`youtube.com/tv`, the full
    ten-foot experience) and desktop mode (`youtube.com`).

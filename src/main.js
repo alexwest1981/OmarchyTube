@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const innertube = require('./innertube');
 const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
+const { planForSession } = require('./sign-in');
 
 // Hardware acceleration flags for Hyprland / Linux.
 //
@@ -237,16 +238,24 @@ function createWindow(profile) {
     });
 
     // Inloggad? Då är det här hela YouTube: flödet kontot kurerat genom åren,
-    // prenumerationerna, historiken, listorna. Inte inloggad? Då går vi till
-    // YouTubes vanliga inloggning — den vägen har e-post, lösenord och
-    // tvåstegsverifiering och slutar inte i TV-appens QR-återvändsgränd.
-    // Partitionskakan gör att svaret gäller den här profilen.
+    // prenumerationerna, historiken, listorna. Utloggad? Då tar vi TV-lägets
+    // QR-väg — skrivbordssidans e-postformulär svarar Google "This browser or
+    // app may not be secure" i en inbäddad webbläsare (mätt 2026-09-18).
+    // Partitionskakan avgör vilket svar som gäller den här profilen.
     customSession.cookies.get({ domain: '.youtube.com' })
         .then((cookies) => {
-            const signedIn = cookies.some((c) => /^(SID|SAPISID|__Secure-1PSID|__Secure-3PSID)$/.test(c.name));
-            win.loadURL(signedIn ? getUrlForMode(currentMode) : 'https://www.youtube.com/');
+            const plan = planForSession(cookies, currentMode);
+            applyMode(plan.mode);
+            if (plan.autoSignIn) {
+                openSignIn(win);
+            } else {
+                win.loadURL(plan.url);
+            }
         })
-        .catch(() => win.loadURL('https://www.youtube.com/'));
+        .catch((err) => {
+            console.warn('[OmarchyTube] Kunde inte läsa profilens kakor:', err);
+            win.loadURL('https://www.youtube.com/tv');
+        });
 
     // Handle external links
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -375,6 +384,47 @@ function createWindow(profile) {
         windowProfiles.delete(win.webContents.id);
         if (mainWindow === win) mainWindow = null;
     });
+}
+
+// TV-appens inloggning ligger ett Enter bort från dess hemskärm (första valet
+// är "Get started"). Vi trycker det åt användaren och slutar så snart koden
+// syns, så att det första en ny profil visar är QR-koden och de åtta tecknen —
+// inte en meny att leta i. Mätt: ett Enter ger "Sign in with your phone — Scan
+// QR code or go to yt.be/activate — Enter the code GDM-STY-SDG".
+const SIGN_IN_SEEN = /scan qr|yt\.be\/activate|enter the code/i;
+
+function openSignIn(win) {
+    let attempts = 0;
+
+    const press = () => {
+        if (win.isDestroyed()) return;
+        // Leanback-appen lyssnar på keydown, och Chromium svarar på båda namnen
+        // men inte alltid på samma — varannan gång får vardera.
+        const keyCode = attempts % 2 === 0 ? 'Return' : 'Enter';
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+    };
+
+    const check = async () => {
+        if (win.isDestroyed()) return;
+        try {
+            const atSignIn = await win.webContents.executeJavaScript(
+                `/${SIGN_IN_SEEN.source}/i.test(document.body.innerText)`);
+            if (atSignIn) return;
+        } catch (err) {
+            // Sidan byts ut medan vi frågar; nästa varv får svaret.
+        }
+        attempts += 1;
+        if (attempts > 4) {
+            console.warn('[OmarchyTube] TV-appens QR-skärm kom inte upp av sig själv — Enter i fönstret tar dig dit.');
+            return;
+        }
+        press();
+        setTimeout(check, 2500);
+    };
+
+    win.webContents.once('did-finish-load', () => setTimeout(check, 3500));
+    win.loadURL('https://www.youtube.com/tv');
 }
 
 // Väljaren: en liten ruta med en uppgift. Egen partition, så den inte delar

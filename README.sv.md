@@ -82,10 +82,14 @@ rekommendationer.
 1. Starta **OmarchyTube**. Första skärmen är profilväljaren, inte en videosida:
    välj med piltangenterna och <kbd>Enter</kbd>, eller tryck <kbd>N</kbd> för att
    lägga till en profil.
-2. En ny profil öppnar **YouTubes egen sida** i den profilens session, med
-   YouTubes vanliga inloggning — e-post, lösenord, tvåstegsverifiering. (TV-appens
-   QR-kod finns kvar ett tangenttryck bort i TV-läget, men är inte längre vägen in,
-   och det finns ingen återvändsgränd om du hellre skriver din adress.)
+2. En ny profil öppnar **YouTubes TV-inloggning** i den profilens session, och
+   appen trycker själv det enda tangenttryck som krävs: det första som möter dig
+   är **QR-koden och de åtta tecknen**. Skanna med mobilen, eller öppna
+   [yt.be/activate](https://yt.be/activate) och skriv koden.
+   Inte lösenordsformuläret, och det är med flit: mätt 2026-09-18 svarar Google
+   en inbäddad webbläsare med *"Couldn't sign you in — This browser or app may
+   not be secure"*. QR-vägen är den Google öppnar för en TV-klient, och den som
+   lägger kontot i profilens egen session.
 3. När du är inloggad öppnas profilen direkt på YouTube i det läge du lämnade:
    <kbd>F2</kbd> växlar mellan TV-läget (`youtube.com/tv`, hela tiofotsupplevelsen)
    och skrivbordsläget (`youtube.com`).

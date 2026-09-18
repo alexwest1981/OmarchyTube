@@ -16,7 +16,7 @@
 (function () {
     const FALLBACK_QUERY = 'music';
 
-    const FALLBACK_NOTE = 'Signed out: YouTube has no home feed without an account (its own answer is "Your YouTube history is off"). Press / to search — that works without an account — or F1 and sign in with the code from youtube.com/activate.';
+    const FALLBACK_NOTE = 'Signed out: YouTube has no home feed without an account (its own answer is "Your YouTube history is off"). Press / to search — that works without an account — or F3 and pick a profile: it opens the TV app sign-in (scan the QR code, or type the code at yt.be/activate).';
 
     // The query to search for instead, or null when there is nothing to fall
     // back to. Only an empty home feed has somewhere to go; an empty search is

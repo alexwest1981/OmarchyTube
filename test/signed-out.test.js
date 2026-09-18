@@ -37,8 +37,8 @@ test('saknad lista kraschar inte, utan behandlas som tom', () => {
 });
 
 test('notisen förklarar båda vägarna ut', () => {
-    assert.match(FALLBACK_NOTE, /youtube\.com\/activate/, 'inloggningsvägen ska stå i notisen');
-    assert.match(FALLBACK_NOTE, /F1/, 'tangenten som öppnar TV-vyn ska stå i notisen');
+    assert.match(FALLBACK_NOTE, /yt\.be\/activate/, 'inloggningsvägen ska stå i notisen');
+    assert.match(FALLBACK_NOTE, /F3/, 'tangenten till profilväljaren ska stå i notisen');
 });
 
 test('sidan läser modulen i stället för att ha en egen kopia', () => {

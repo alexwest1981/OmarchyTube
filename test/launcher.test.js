@@ -47,10 +47,19 @@ test('inloggningsvalet kommer från sign-in-modulen', () => {
     assert.match(main, /planForSession\(/, 'beslutet om inloggning tas någon annanstans än i den provade modulen');
 });
 
-test('TV-läget tar bredden när rutan är smal', () => {
-    // Mätt: 941 px gav rotfont 5,88 px mot 24 px vid 1920 — TV-appen är oläslig
-    // i en smal ruta, så läget maximerar i stället för att appen skalar om.
-    assert.match(main, /newMode === 'tv'[\s\S]{0,300}maximize\(\)/, 'TV-läget maximerar inte');
+test('profilfönstret är fullskärm, och det är inte maximize()', () => {
+    // Hyprland tilade rutan till 941 px och YouTubes 10-fotslayout blev grotesk
+    // (två gigantiska brickor). fullscreen: true är en riktig begäran till
+    // kompositorn; maximize() förlorar mot tilningen.
+    assert.match(code, /fullscreen: Boolean\(profile\)/, 'profilfönstret ber inte om fullskärm');
+    assert.ok(!code.includes('.maximize()'), 'maximize() är tillbaka — den biter inte mot Hyprlands tilning');
+});
+
+test('utloggad profil vaktas tills kontot finns, då blir det användarens läge', () => {
+    // TV-vägen är bara en inloggningsdörr: 10-fotslayouten är grotesk i fönster.
+    assert.match(code, /customSession\.cookies\.get\(\{ domain: '\.youtube\.com' \}\)/, 'ingen vakt på sessionen');
+    assert.match(code, /watchForSignIn\(win, customSession\)/, 'vakten kopplas inte in');
+    assert.match(code, /Kontot finns i sessionen[\s\S]{0,400}loadURL\(plan\.url\)/, 'appen går inte tillbaka till användarens läge efter inloggning');
 });
 
 test("'closed' läser aldrig webContents, som redan är förstörd", () => {

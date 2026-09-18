@@ -13,11 +13,15 @@
 //   * en funktion som deklareras inuti en annan (handleExitVideo i registerIpc)
 //     gjorde Esc stendöd utan ett ljud.
 //
+// Fönstret är fullskärm (en riktig begäran till kompositorn — maximize() förlorar
+// mot Hyprlands tilning: mätt blev rutan 941 px bred, och YouTubes 10-fotslayout
+// visar då två gigantiska brickor i stället för en läsbar rad).
+//
 // Det vi gör är fönstret, sessionen, webbläsaridentiteten och läget. Inloggningen
 // går via Googles TV-flöde (QR-koden) eftersom Google vägrar lösenordsformuläret
 // i en inbäddad webbläsare — mätt: "Couldn't sign you in — This browser or app
 // may not be secure".
-const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, screen, session, shell, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -48,8 +52,8 @@ const PICKER_PARTITION = 'persist:omarchy-picker';
 
 let mainWindow = null;
 const configuredPartitions = new Set();
-// Fönster -> profil, så att rutnätet ... nej: så att appen vet vilken session
-// rutan visar (Esc i väljaren går tillbaka till rätt profil).
+// Fönster -> profil: appen måste veta vilken session rutan visar, annars vet
+// inte Esc i väljaren vart den skall tillbaka.
 const windowProfiles = new Map();
 
 function readState() {
@@ -123,17 +127,19 @@ function applyMode(newMode) {
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
     }
-
-    // TV-appen blir oläslig i en smal ruta, så TV-läget tar hela skärmen.
-    if (newMode === 'tv' && mainWindow && !mainWindow.isDestroyed()
-        && !mainWindow.isMaximized() && mainWindow.getBounds().width < 1600) {
-        mainWindow.maximize();
-        console.log('[OmarchyTube] TV-läget vill ha bredden — fönstret maximerat.');
-    }
 }
 
-function stopOnLeave() {
-    // Ingen sidscriptning alls: att navigera bort river sidan, och videon med den.
+// Mätraden. Alex ögon är instrumentet, men den här raden ger siffrorna bakom dem
+// — och den läser bara Electronns egen yta, aldrig sidans DOM.
+function logViewport(win) {
+    try {
+        const bounds = win.getContentBounds();
+        const display = screen.getDisplayMatching(bounds);
+        const zoom = win.webContents.getZoomFactor();
+        console.log(`[OmarchyTube] rutan ${bounds.width}x${bounds.height} | zoom ${zoom.toFixed(2)} | skärmens skala ${display.scaleFactor} | fullskärm ${win.isFullScreen()} | ${currentMode}`);
+    } catch (err) {
+        console.warn('[OmarchyTube] Kunde inte läsa rutan:', err.message);
+    }
 }
 
 function goBack() {
@@ -159,6 +165,11 @@ function createWindow(profile) {
     const state = readState();
     const win = new BrowserWindow({
         title: profile ? `OmarchyTube — ${profile.name}` : 'Vem skall titta? — OmarchyTube',
+        // Profilen är en dedikerad fullskärmsapp. fullscreen: true är en riktig
+        // begäran till kompositorn; maximize() förlorar mot Hyprlands tilning —
+        // mätt: rutan blev 941 px bred, och YouTubes 10-fotslayout visar då två
+        // gigantiska brickor i stället för en läsbar rad.
+        fullscreen: Boolean(profile),
         width: state.width || 1280,
         height: state.height || 800,
         minWidth: 640,
@@ -194,7 +205,6 @@ function createWindow(profile) {
         if (mainWindow === win) mainWindow = null;
     });
 
-    if (state.isMaximized !== false) win.maximize();
     win.webContents.setUserAgent(getUserAgentForMode(currentMode));
 
     win.webContents.setWindowOpenHandler(({ url }) => {
@@ -279,15 +289,48 @@ function startWithProfile(win, customSession) {
             const plan = planForSession(cookies, currentMode);
             if (plan.mode !== currentMode) applyMode(plan.mode);
             win.loadURL(plan.url);
+            logViewport(win);
             if (plan.autoSignIn) {
                 console.log('[OmarchyTube] Ingen session i den här profilen: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
-                win.setTitle(`OmarchyTube — ${readState().mode === 'tv' ? 'TV' : 'YouTube'}: tryck Enter för QR-koden`);
+                win.setTitle('OmarchyTube — tryck Enter för QR-koden');
+                watchForSignIn(win, customSession);
             }
         })
         .catch((err) => {
             console.warn('[OmarchyTube] Kunde inte läsa profilens kakor:', err.message);
             win.loadURL('https://www.youtube.com/tv');
         });
+}
+
+// TV-vägen är en inloggningsdörr, inte en spelare: 10-fotslayouten är grotesk i
+// ett normalt fönster. Så fort kontot finns i sessionen går appen tillbaka till
+// det läge användaren valt (skrivbordet, som ser ut som YouTube). Läser bara
+// Electronns kakburk — aldrig sidan.
+const SIGN_IN_POLL_MS = 3000;
+// ponytail: ger upp efter tio minuter; gör det till en inställning om någon vill vakta längre
+const SIGN_IN_WATCH_MS = 10 * 60 * 1000;
+
+function watchForSignIn(win, customSession) {
+    const started = Date.now();
+    const timer = setInterval(() => {
+        if (win.isDestroyed() || Date.now() - started > SIGN_IN_WATCH_MS) {
+            clearInterval(timer);
+            return;
+        }
+        customSession.cookies.get({ domain: '.youtube.com' })
+            .then((cookies) => {
+                const plan = planForSession(cookies, readState().mode || 'desktop');
+                if (plan.autoSignIn) return; // fortfarande utloggad
+                clearInterval(timer);
+                if (win.isDestroyed()) return;
+                console.log(`[OmarchyTube] Kontot finns i sessionen — tillbaka till ${plan.mode}-läget.`);
+                applyMode(plan.mode);
+                win.loadURL(plan.url);
+                logViewport(win);
+            })
+            .catch((err) => console.warn('[OmarchyTube] Kunde inte läsa sessionen:', err.message));
+    }, SIGN_IN_POLL_MS);
+    if (timer.unref) timer.unref();
 }
 
 function openProfile(id) {

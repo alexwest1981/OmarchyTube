@@ -13,8 +13,16 @@ personen — ett fönster, en Google-session per profil.
    <kbd>↵</kbd> om du inte är där). Skanna med mobilen, eller tryck <kbd>F4</kbd>
    för att öppna `yt.be/activate` i en webbläsare och skriva koden där. Kontot
    hamnar i profilen och stannar där.
-4. <kbd>F3</kbd> tar tillbaka väljaren i samma fönster, <kbd>Esc</kbd> går tillbaka
-   till profilen, <kbd>F2</kbd> växlar skrivbords-/TV-läge, <kbd>F11</kbd> är
+4. En profil öppnas som en **fullskärmsapp**. Det är inte utsmyckning: Hyprland
+   tilade ett vanligt fönster till halva skärmen (mätt: 941 px), och YouTubes
+   10-fotslayout i 941 px visar två gigantiska brickor och kanten av en tredje i
+   stället för en läsbar rad. En riktig fullskärmsbegäran från fönstret slår
+   tilningen.
+5. När kontot finns i sessionen lämnar appen TV-inloggningen och går tillbaka till
+   ditt läge — skrivbordet som standard, vilket ser ut som YouTube och visar flera
+   rader.
+6. <kbd>F3</kbd> tar tillbaka väljaren i samma fönster, <kbd>Esc</kbd> går tillbaka
+   till profilen, <kbd>F2</kbd> växlar skrivbords-/TV-läge, <kbd>F11</kbd> växlar
    fullskärm. <kbd>N</kbd> lägger till en profil, <kbd>Delete</kbd> två gånger tar
    bort en.
 

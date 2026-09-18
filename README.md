@@ -13,10 +13,17 @@ one window, one Google session per profile.
    <kbd>↵</kbd> if you are not there yet). Scan it with your phone, or press
    <kbd>F4</kbd> to open `yt.be/activate` in a browser and type the code there.
    The account lands in that profile and stays there.
-4. <kbd>F3</kbd> brings the picker back in the same window, <kbd>Esc</kbd> goes
-   back to the profile, <kbd>F2</kbd> switches desktop/TV mode,
-   <kbd>F11</kbd> is fullscreen. <kbd>N</kbd> adds a profile, <kbd>Delete</kbd>
-   twice removes one.
+4. A profile opens as a **fullscreen app**. That is not decoration: Hyprland tiles
+   a normal window to half the screen (941 px measured), and YouTube's ten-foot TV
+   layout in 941 px shows two gigantic tiles and the edge of a third instead of a
+   readable row. A real fullscreen request from the window beats tiling.
+5. Once the account is in the session the app leaves the TV sign-in screen and
+   goes back to your mode — desktop by default, which looks like YouTube and shows
+   several rows.
+6. <kbd>F3</kbd> brings the picker back in the same window, <kbd>Esc</kbd> goes
+   back to the profile, <kbd>F2</kbd> switches desktop/TV mode, <kbd>F11</kbd>
+   toggles fullscreen. <kbd>N</kbd> adds a profile, <kbd>Delete</kbd> twice removes
+   one.
 
 ```sh
 omarchy-tube            # the picker

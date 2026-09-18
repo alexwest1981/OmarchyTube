@@ -247,12 +247,16 @@ html, body {
    taget. Klassen nedan halverar roten och därmed kort, radavstånd och mellanrum
    i samma proportion. Mätt vid 1920x1080: kort 264x251, radavstånd 327 px, tre
    hela rader i bild (fyra vid 1920x1200) mot en rad före; titeln mäter 18 px och
-   metadata 12 px, alltså läsbart kvar. Appens egen krom är px-baserad (toast,
+   metadata 12 px, alltså läsbart kvar (vid 50 % av appens egen skala). Appens egen krom är px-baserad (toast,
    tillbaka-knapp) och rörs inte. Klassen sätts av injector.js, och bara på
    bläddrings- och söksidorna: spelarens kontroller ritas i samma rem-skala och
    ska stå kvar i sin egen storlek. */
 html.omarchy-leanback {
-    font-size: 50% !important;
+    /* Appen sätter 1.25vw (16 px vid 1280, 24 px vid 1920 — mätt), alltså
+       halva den storleken. Procent går inte att använda: en procentsats på
+       rot-elementet räknas mot initiala 16 px, inte mot appens värde, och gav
+       8 px vid 1920 i stället för 12. */
+    font-size: 0.625vw !important;
 }
 
 /* --- Level 10: Key Hints (first run) --- */

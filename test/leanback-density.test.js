@@ -12,10 +12,12 @@ test('Level 9 halverar rotstorleken och gör det med !important', () => {
     // vinner den och korten förblir 528x501 px vid 1920 — en rad i bild.
     const rule = css.match(/html\.omarchy-leanback\s*\{[^}]*\}/);
     assert.ok(rule, 'Level 9-regeln html.omarchy-leanback saknas i styles.css');
-    const size = rule[0].match(/font-size:\s*(\d+)%\s*!important/);
-    assert.ok(size, 'rotstorleken måste sättas i procent med !important');
-    const percent = Number(size[1]);
-    assert.ok(percent >= 35 && percent <= 70, `orimlig densitet: ${percent}%`);
+    // Procent fungerar inte på rot-elementet (den räknas mot initiala 16 px, inte
+    // mot appens 1.25vw och gav 8 px i stället för 12 vid 1920). Därför vw.
+    const size = rule[0].match(/font-size:\s*([\d.]+)vw\s*!important/);
+    assert.ok(size, 'rotstorleken måste sättas i vw med !important');
+    const vw = Number(size[1]);
+    assert.ok(vw >= 0.45 && vw <= 0.9, `orimlig densitet: ${vw}vw (appen sätter 1.25vw)`);
 });
 
 test('densiteten gäller bläddring och sökning, men inte spelaren', () => {

@@ -33,6 +33,8 @@ test('tangenthjälpen visas en gång och kan stängas', () => {
     assert.match(js, /addEventListener\('keydown', hideKeyHints\)/, 'tipset stängs inte av en tangent');
     // TV-appen byter ut bodyns innehåll; en nod som läggs in en gång försvinner.
     assert.match(js, /setInterval\(ensureKeyHints, 1000\)/, 'tipset återinsätts inte efter en omritning');
+    // Klockan måste också TA BORT tipset, inte bara sluta sätta in det.
+    assert.match(js, /Date\.now\(\)\s*>\s*hintsDeadline[^}]*hideKeyHints\(\)/, 'tipset tas inte bort när tiden gått ut');
 });
 
 test('ingen innerHTML i det som injiceras i YouTubes sidor', () => {

@@ -495,7 +495,14 @@
     }
 
     function ensureKeyHints() {
-        if (!hintsDeadline || Date.now() > hintsDeadline) return;
+        if (!hintsDeadline) return;
+        if (Date.now() > hintsDeadline) {
+            // Tiden ute: ta bort tipset. Utan den här grenen stannade det kvar på
+            // skärmen för alltid om ingen tangent trycktes — mätt i den byggda
+            // appen, där tipset stod kvar efter tolv sekunder med flaggan osatt.
+            hideKeyHints();
+            return;
+        }
         if (!document.body || document.getElementById('omarchy-key-hints')) return;
         const box = buildKeyHints();
         document.body.appendChild(box);

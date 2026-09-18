@@ -65,7 +65,7 @@
         if (onUndo) {
             const undoBtn = document.createElement('button');
             undoBtn.className = 'omarchy-toast-undo';
-            undoBtn.innerText = 'Ångra';
+            undoBtn.innerText = 'Undo';
             undoBtn.onclick = (e) => {
                 e.stopPropagation();
                 onUndo();
@@ -139,9 +139,9 @@
         sponsor: 'Sponsor',
         intro: 'Intro',
         outro: 'Outro',
-        selfpromo: 'Egen reklam',
-        interaction: 'Prenumerera-påminnelse',
-        music_offtopic: 'Icke-musik'
+        selfpromo: 'Self Promotion',
+        interaction: 'Interaction Reminder',
+        music_offtopic: 'Non-Music Section'
     };
 
     async function loadSponsorSegments(videoId) {
@@ -213,7 +213,7 @@
                 const prevTime = currentTime;
                 video.currentTime = end;
                 const catName = categoryLabels[seg.category] || seg.category;
-                showToast(`⚡ Hoppade över ${catName} (${formatTime(start)} - ${formatTime(end)})`, () => {
+                showToast(`⚡ Skipped ${catName} (${formatTime(start)} - ${formatTime(end)})`, () => {
                     ignoredSegmentUUID = seg.UUID;
                     video.currentTime = Math.max(start, prevTime);
                 });
@@ -237,7 +237,7 @@
                 applyDislikesUI(data);
             }
         } catch (err) {
-            console.warn('[OmarchyTube] Kunde inte hämta ogillanden:', err);
+            console.warn('[OmarchyTube] Could not fetch dislikes:', err);
         }
     }
 
@@ -394,7 +394,7 @@
             svg.appendChild(path);
 
             const span = document.createElement('span');
-            span.textContent = 'Tillbaka';
+            span.textContent = 'Back';
 
             btn.appendChild(svg);
             btn.appendChild(span);

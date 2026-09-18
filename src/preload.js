@@ -1,41 +1,14 @@
-const { webFrame, ipcRenderer, contextBridge } = require('electron');
-const fs = require('fs');
-const path = require('path');
+const { ipcRenderer, contextBridge } = require('electron');
 
-// Expose bridge for quick exit and controls
+// The renderer's whole surface to the main process: a way to leave a video
+// without reaching for the mouse. CSS and the page injector are deliberately
+// not injected here — main.js owns that, because it is the place that knows
+// whether the current URL is YouTube at all (this file runs for every
+// document, which includes the Google sign-in window).
 try {
     contextBridge.exposeInMainWorld('omarchyBridge', {
         exitVideo: () => ipcRenderer.send('omarchy-exit-video')
     });
 } catch (err) {
     console.error('[OmarchyTube] Preload bridge error:', err);
-}
-
-// Only run in top-level frame
-if (process.isMainFrame) {
-    const stylesPath = path.join(__dirname, 'styles.css');
-    const injectorPath = path.join(__dirname, 'injector.js');
-
-    try {
-        if (fs.existsSync(stylesPath)) {
-            const cssContent = fs.readFileSync(stylesPath, 'utf8');
-            webFrame.insertCSS(cssContent);
-        }
-        if (fs.existsSync(injectorPath)) {
-            const jsContent = fs.readFileSync(injectorPath, 'utf8');
-            const runInjector = () => {
-                webFrame.executeJavaScript(jsContent).catch((err) => {
-                    console.error('[OmarchyTube] Fel vid körning av injector:', err);
-                });
-            };
-
-            if (document.readyState === 'loading') {
-                window.addEventListener('DOMContentLoaded', runInjector);
-            } else {
-                runInjector();
-            }
-        }
-    } catch (err) {
-        console.error('[OmarchyTube] Preload read error:', err);
-    }
 }

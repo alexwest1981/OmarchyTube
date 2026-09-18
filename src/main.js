@@ -13,6 +13,12 @@ const innertube = require('./innertube');
 // platform is set on the command line instead: `npm start` passes
 // --ozone-platform=wayland, and the flatpak entry point passes it when
 // WAYLAND_DISPLAY is set.
+// Playing starts on a page transition (the user pressed Enter in our grid, then
+// the window loads youtube.com), and Chromium only counts gestures made on the
+// page itself — measured: the watch page came up with a paused <video> at t=0
+// and no error. A leanback player that answers a keypress with silence is
+// broken, so the policy is lifted.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-vulkan');
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL,VaapiVideoDecoder');
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
@@ -89,11 +95,6 @@ function loadBrowse() {
     mainWindow.loadFile(BROWSE_PAGE);
 }
 
-function watchUrlForMode(mode, videoId) {
-    return mode === 'tv'
-        ? `https://www.youtube.com/tv#/watch?v=${videoId}`
-        : `https://www.youtube.com/watch?v=${videoId}`;
-}
 
 app.userAgentFallback = getUserAgentForMode(currentMode);
 
@@ -136,6 +137,13 @@ function configureSession(targetSession) {
     );
 }
 
+function applyMode(newMode) {
+    currentMode = newMode;
+    saveWindowState({ mode: currentMode });
+    app.userAgentFallback = getUserAgentForMode(currentMode);
+    if (mainWindow) mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
+}
+
 function switchMode(newMode) {
     if (newMode === currentMode) {
         // Same mode: F2 then means "back to the grid", so the key never strands
@@ -143,10 +151,7 @@ function switchMode(newMode) {
         if (!onBrowsePage) loadBrowse();
         return;
     }
-    currentMode = newMode;
-    saveWindowState({ mode: currentMode });
-    app.userAgentFallback = getUserAgentForMode(currentMode);
-    mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
+    applyMode(newMode);
     onBrowsePage = false;
     loadBrowse();
     console.log(`[OmarchyTube] Switched mode to: ${currentMode}`);
@@ -368,11 +373,17 @@ function createWindow() {
     // The grid's two ways to YouTube's data, and its one way to play.
     ipcMain.handle('omarchy-browse-home', () => innertube.home());
     ipcMain.handle('omarchy-browse-search', (_event, query) => innertube.search(String(query || '')));
+    // Playback happens on YouTube's desktop watch page. Measured: it loads the
+    // right video signed out (duration 1793 s for the video the fixture holds),
+    // while the TV app's own watch route never opened — it bounced back to its
+    // home, signed out at least. The app's injector also targets that page
+    // (ytd-*: ad skipping, SponsorBlock, dislike counts, the back button).
     ipcMain.on('omarchy-play', (_event, videoId) => {
         if (!mainWindow || !/^[\w-]{11}$/.test(String(videoId))) return;
         onBrowsePage = false;
         returnToGrid = true;
-        mainWindow.loadURL(watchUrlForMode(currentMode, videoId));
+        applyMode('desktop');
+        mainWindow.loadURL(`https://www.youtube.com/watch?v=${videoId}`);
     });
 
     // Handle mouse 4 (Back) button

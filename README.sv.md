@@ -8,24 +8,24 @@ personen — ett fönster, en Google-session per profil.
 1. Starta **OmarchyTube**: profilväljaren är fönstret.
 2. <kbd>↵</kbd> på en profil öppnar YouTube i det fönstret, i den profilens egen
    session.
-3. Inloggningen är en dörr appen öppnar **åt** dig, inte en snårskog. En utloggad
-   profil öppnar YouTubes vanliga sida — den ser ut som YouTube och lyder zoom. I
-   samma stund du försöker med YouTubes egen inloggning fångar appen Googles
-   blockerade inbäddade väg och tar dig till TV-inloggningen i stället: en **QR-kod
-   och en åttateckenskod** (första valet på den skärmen är *Get started* — tryck
-   <kbd>↵</kbd> om du inte är på kodsidan). Skanna med mobilen, eller tryck
-   <kbd>F4</kbd> för att öppna `yt.be/activate`. Kontot hamnar i profilen, och appen
-   går själv tillbaka till ditt vanliga läge. <kbd>F2</kbd> tar dig till dörren
-   direkt.
-4. En profil öppnas som en **fullskärmsapp**. Det är inte utsmyckning: Hyprland
+3. Inloggningen går via YouTubes TV-skärm, den enda väg Google lämnar öppen för en
+   inbäddad webbläsare: en **QR-kod och en åttateckenskod**. I TV-layouten ligger
+   skärmen bakom *avataren uppe till vänster* → kontoskärmen → *Sign in*; tryck
+   <kbd>↵</kbd> om den öppnar på *Get started*. Skanna med mobilen, eller tryck
+   <kbd>F4</kbd> för `yt.be/activate`. Kontot hamnar i profilens egen session och
+   stannar där — appen rör det aldrig. Ett försök med YouTubes egen *Sign in* på
+   skrivbordssidan fångas och skickas till samma dörr, eftersom Google svarar en
+   inbäddad webbläsare med *"This browser or app may not be secure"*.
+4. <kbd>F2</kbd> växlar skrivbords-/TV-layout. Det är allt den gör — ett lägesbyte
+   som aldrig rör sessionen.
+5. En profil öppnas som en **fullskärmsapp**. Det är inte utsmyckning: Hyprland
    tilade ett vanligt fönster till halva skärmen (mätt: 941 px), och YouTubes
    10-fotslayout i 941 px visar två gigantiska brickor och kanten av en tredje i
    stället för en läsbar rad. En riktig fullskärmsbegäran från fönstret slår
    tilningen.
-5. När kontot finns i sessionen lämnar appen TV-inloggningen och går tillbaka till
-   ditt läge — skrivbordet som standard, vilket ser ut som YouTube och visar flera
-   rader.
-6. <kbd>F3</kbd> tar tillbaka väljaren i samma fönster, <kbd>Esc</kbd> går tillbaka
+6. När kontot finns i sessionen går appen tillbaka till ditt läge — skrivbordet som
+   standard, vilket ser ut som YouTube och visar flera rader.
+7. <kbd>F3</kbd> tar tillbaka väljaren i samma fönster, <kbd>Esc</kbd> går tillbaka
    till profilen, <kbd>F2</kbd> växlar skrivbords-/TV-läge, <kbd>F11</kbd> växlar
    fullskärm. <kbd>N</kbd> lägger till en profil, <kbd>Delete</kbd> två gånger tar
    bort en.
@@ -77,13 +77,13 @@ Står du i TV-layouten är inloggningen YouTubes egen skärm: avataren uppe till
 vänster → kontoskärmen → *Sign in* → QR-koden (eller tryck <kbd>↵</kbd> på
 *Get started* om den kom upp).
 
-En sak TV-appen gör på egen hand är att hoppa förbi inloggningsrutan: har
-profilen redan besökardata öppnar den sitt vanliga flöde (*Recommended*, *New to
-you*) i stället, och där finns **ingen QR-kod** någonstans — mätt, och det var dit
-ett klick på *Sign in* ledde. Därför städar appen bort profilens besökskakor **och dess
-lokala lagring** precis innan den öppnar dörren — att bara ta kakorna räckte inte,
-TV-appen kände ändå igen en återkommande besökare. Bara när det inte finns något konto: en befintlig session
-rörs aldrig.
+**Appen raderar aldrig sessionsdata.** Regeln har en historia: en version av
+programmet städade profilens kakor och lokala lagring innan den öppnade
+inloggningsdörren, för att TV-appen skulle visa inloggningen i stället för sitt
+flöde. Det fungerade — och den slängde samtidigt bort sessionen TV-appen just fått,
+eftersom det är där TV-appen har den. Varje <kbd>F2</kbd> betydde att QR-koden fick
+skannas igen. Ingenting i `src/` får ta bort kakor eller lagring nu, och ett prov
+fäller om något försöker. Dörren öppnar en sida; den städar inte.
 
 Den uppenbara vägen — YouTubes vanliga lösenordsformulär — är stängd för varje
 inbäddad webbläsare. Därför fångar appen den i stället för att visa den: ett klick
@@ -134,7 +134,7 @@ läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 npm test
 ```
 
-44 prov: dörren, städningen, fångstgrinden, lägesvalet, zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
+59 prov: att ingenting raderar sessionsdata, dörren, fångstgrinden, lägesvalet, zoomstegen, och en skanner som fäller om en definition anropar sig själv, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
 aldrig dela en), webbläsaridentiteten per läge, inloggningsbeslutet, IPC-kanalerna,
 och ett arkitekturprov som fäller om en injektor, ett zoom-anrop eller ett
 sidskript kommer tillbaka.

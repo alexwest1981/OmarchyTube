@@ -273,16 +273,10 @@ function createWindow(profile) {
             return;
         }
         if (input.key === 'F2') {
-            // Inloggad: F2 är ett riktigt val, och det sparas. Utloggad: F2 är dörren
-            // till QR-koden, och dörren rör inte användarens läge.
-            sessionCookies(sessionOfWindow(win))
-                .then((cookies) => {
-                    const signedIn = isSignedIn(cookies);
-                    noteSignInState(win, signedIn);
-                    if (signedIn) switchMode(currentMode === 'tv' ? 'desktop' : 'tv', { persist: true });
-                    else switchMode('tv');
-                })
-                .catch(() => switchMode('tv'));
+            // F2 växlar läge. Ingenting annat: ingen dörr, ingen kontokoll, inget som
+            // kan röra sessionen. Det var här sessionen dog förut (F2 => dörren =>
+            // städning), och Alex fastnade i en QR-loop.
+            switchMode(currentMode === 'tv' ? 'desktop' : 'tv', { persist: true });
             event.preventDefault();
             return;
         }
@@ -355,14 +349,10 @@ function switchMode(newMode, { persist = false } = {}) {
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
 
-    // TV-läget ÄR dörren: rätt sida, städade besökskakor, och vakten som går
-    // tillbaka till användarens läge så fort kontot finns — annars blir dörren ett
-    // rum man fastnar i.
-    if (currentMode === 'tv') {
-        openSignInDoor(win, sessionOfWindow(win));
-        return;
-    }
-    win.loadURL(pageForMode('desktop'));
+    // Rätt sida för läget. Ingen dörr, ingen städning: TV-sidan visar sin egen
+    // inloggning när den vill, och kontot i profilen rörs inte.
+    win.loadURL(pageForMode(currentMode));
+    if (currentMode === 'tv') watchForSignIn(win, sessionOfWindow(win));
 }
 
 // Profilen öppnar sin vanliga sida i det läge användaren valt — även utloggad, för
@@ -375,6 +365,7 @@ function startWithProfile(win, customSession) {
         .then((cookies) => {
             const plan = planForSession(cookies, currentMode);
             noteSignInState(win, plan.signedIn);
+            logCookieInventory(profile, cookies);
             console.log(`[OmarchyTube] Profilen öppnas: ${describeSession(cookies)} | ${plan.mode} | ${plan.signedIn ? 'inloggad' : 'utloggad'}`);
             if (plan.mode !== currentMode) applyMode(plan.mode);
             if (plan.signIn) {
@@ -395,35 +386,15 @@ function startWithProfile(win, customSession) {
         });
 }
 
-// TV-appen hoppar FÖRBI inloggningsrutan när partitionen redan har besökskakor: den
-// visar sitt vanliga flöde ("Recommended"/"New to you") i stället, och där finns
-// ingen QR-kod. Mätt 2026-09-19 hos Alex — ett klick på Sign in gav flödet, ingen
-// kod. Med tom partition kommer "Get started" först (mätt 2026-09-18 mot
-// youtube.com/tv). Städningen rör därför bara besökarens egna kakor: finns ett
-// konto (SID) rörs ingenting, och en städad besökare kostar ingenting att bygga upp
-// igen.
-async function forgetVisitor(targetSession) {
-    const cookies = await sessionCookies(targetSession);
-    if (isSignedIn(cookies)) {
-        console.log(`[OmarchyTube] Städar ingenting: ${describeSession(cookies)}.`);
-        return false;
-    }
-
-    await Promise.all(cookies.map((cookie) =>
-        targetSession.cookies.remove('https://www.youtube.com/', cookie.name).catch(() => {})));
-
-    // Kakor är inte allt: TV-appen minns en återkommande besökare i lokal lagring
-    // också, och då visar den flödet i stället för inloggningen (mätt 2026-09-19 —
-    // städade kakor räckte inte). Electronns egen API, ingen sidscriptning.
-    for (const origin of ['https://www.youtube.com', 'https://www.youtube.com/tv']) {
-        await targetSession.clearStorageData({
-            origin,
-            storages: ['localstorage', 'indexdb', 'cookies']
-        }).catch((err) => console.warn('[OmarchyTube] Kunde inte städa', origin, err.message));
-    }
-    console.log(`[OmarchyTube] Städade ${cookies.length} besökskakor och den lokala lagringen, så TV-appen visar inloggningen i stället för flödet.`);
-    return true;
-}
+// Här låg en funktion som städade profilens kakor och lokala lagring innan dörren
+// öppnades. Den var vårt värsta fel: TV-appen håller sin session i profilens egen
+// lagring, och städningen raderade den — så varje F2, varje Googlenavigering och
+// varje dörrbesök betydde en ny QR-inloggning. Alex: "det känns som du inte gör
+// något alls, det är exakt samma visa hela tiden."
+//
+// Appen raderar ALDRIG sessionsdata. Ingenting i den här filen får anropa
+// clearStorageData, cookies.remove eller något annat som tar bort något ur en
+// profil. Provet i test/launcher.test.js fäller om det kommer tillbaka.
 
 // Dörren. ETT ställe, tre vägar in: ett klick på YouTubes inloggning (fångad i
 // popup eller navigering), F2, eller en utloggad profil som startar i TV-läget.
@@ -434,8 +405,6 @@ async function openSignInDoor(win, targetSession) {
     // tittar på en ögonblicksbild av kakorna, så en städning mitt i TV-appens
     // inloggning kastar bort sessionen som just skapades.
     if (currentMode === 'tv' && win.webContents.getURL().startsWith(TV_PAGE)) return;
-    const wasVisitor = await forgetVisitor(targetSession);
-    if (win.isDestroyed()) return;
 
     const plan = signInPlan();
     applyMode(plan.mode);
@@ -443,9 +412,7 @@ async function openSignInDoor(win, targetSession) {
     console.log('[OmarchyTube] Inloggningsdörren: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
     win.setTitle('OmarchyTube — tryck Enter för QR-koden');
     logViewport(win);
-    // Vakten finns för att följa en inloggning som pågår — en inloggad profil behöver
-    // den inte, och skulle bara ladda om dörren i onödan.
-    if (wasVisitor) watchForSignIn(win, targetSession);
+    watchForSignIn(win, targetSession);
 }
 
 // Googles lösenordsväg är stängd för inbäddade webbläsare. I stället för att visa
@@ -468,6 +435,19 @@ function describeSession(cookies) {
     const names = sessionCookieNames(cookies);
     return names.length ? `konto: ${names.join(', ')}` : `konto: nej (${cookies.length} kakor, ingen sessionskaka)`;
 }
+
+// Inventariet. Loggas vid varje start, för att svara på var TV-appens session
+// faktiskt bor — kakor eller sidans egen lagring. Gissningar har kostat nog.
+function logCookieInventory(profile, cookies) {
+    const list = cookies
+        .map((cookie) => `${cookie.name}@${cookie.domain}${cookie.session ? '' : '*'}`)
+        .sort()
+        .join(' ');
+    console.log(`[OmarchyTube] Kakor i profilen ${profile.name}: ${cookieInventoryCount(cookies)} st`);
+    console.log(`[OmarchyTube]   ${list || '(inga)'}`);
+}
+
+const cookieInventoryCount = (cookies) => cookies.length;
 
 // Vem som är inloggad, per ruta. Fångsten av Googles blockerade inloggningsväg får
 // bara gälla en ruta som INTE har ett konto — annars kastas en inloggad användare

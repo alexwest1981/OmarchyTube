@@ -8,23 +8,24 @@ one window, one Google session per profile.
 1. Launch **OmarchyTube**: the profile picker is the window.
 2. <kbd>↵</kbd> on a profile opens YouTube in that window, in that profile's own
    session partition.
-3. Signing in is a door the app opens **for** you, not a maze. A signed-out
-   profile opens YouTube's normal page — it looks like YouTube and it obeys zoom.
-   The moment you try YouTube's own sign-in, the app catches Google's blocked
-   embedded path and takes you to the TV sign-in instead: a **QR code and an
-   eight-character code** (that screen's first item is *Get started* — press
-   <kbd>↵</kbd> if you are not on the code screen yet). Scan it with your phone, or
-   press <kbd>F4</kbd> to open `yt.be/activate`. The account lands in that profile,
-   and the app returns to your normal mode on its own. <kbd>F2</kbd> takes you to
-   the door directly.
-4. A profile opens as a **fullscreen app**. That is not decoration: Hyprland tiles
+3. Signing in goes through YouTube's TV screen, the one route Google leaves open
+   to an embedded browser: a **QR code and an eight-character code**. In the TV
+   layout that screen is behind the *avatar in the top left* → the account screen →
+   *Sign in*; press <kbd>↵</kbd> if it opens on *Get started*. Scan the code with
+   your phone, or press <kbd>F4</kbd> for `yt.be/activate`. The account lands in that
+   profile's own session and stays there — the app never touches it. Trying
+   YouTube's own *Sign in* on the desktop page is caught and sent to the same door,
+   because Google answers an embedded browser with *"This browser or app may not be
+   secure"*.
+4. <kbd>F2</kbd> switches desktop/TV layout. That is all it does — it is a mode
+   switch and it never touches the session.
+5. A profile opens as a **fullscreen app**. That is not decoration: Hyprland tiles
    a normal window to half the screen (941 px measured), and YouTube's ten-foot TV
    layout in 941 px shows two gigantic tiles and the edge of a third instead of a
    readable row. A real fullscreen request from the window beats tiling.
-5. Once the account is in the session the app leaves the TV sign-in screen and
-   goes back to your mode — desktop by default, which looks like YouTube and shows
-   several rows.
-6. <kbd>F3</kbd> brings the picker back in the same window, <kbd>Esc</kbd> goes
+6. Once the account is in the session the app returns to your mode — desktop by
+   default, which looks like YouTube and shows several rows.
+7. <kbd>F3</kbd> brings the picker back in the same window, <kbd>Esc</kbd> goes
    back to the profile, <kbd>F2</kbd> switches desktop/TV mode, <kbd>F11</kbd>
    toggles fullscreen. <kbd>N</kbd> adds a profile, <kbd>Delete</kbd> twice removes
    one.
@@ -78,13 +79,13 @@ If you are in the TV layout, sign-in is YouTube's own screen: the avatar in the 
 left → the account screen → *Sign in* → the QR code (or press <kbd>↵</kbd> on
 *Get started* if that is what came up).
 
-One thing the TV app does on its own is skip the sign-in screen: with visitor
-data already in the profile it opens its normal feed instead
-(*Recommended*, *New to you*) and there is **no QR code** anywhere on it — measured,
-that is where clicking *Sign in* led. So the app clears the profile's visitor
-cookies **and its local storage** right before it opens the door — clearing cookies
-alone was not enough, the TV app still recognised a returning visitor. Only when there is no account: an existing
-session is never touched.
+**The app never deletes session data.** That rule has a history: a version of this
+program cleared the profile's cookies and local storage before opening the sign-in
+door, so the TV app would show its sign-in screen instead of its feed. It worked —
+and it also threw away the session the TV app had just been given, because that is
+where the TV app keeps it. Every <kbd>F2</kbd> meant scanning the QR code again.
+Nothing in `src/` may remove cookies or storage now, and a test fails if anything
+tries. The door opens a page; it does not clean one.
 
 The obvious route — YouTube's normal password form — is closed to every
 embedded browser. That is why the app intercepts it instead of showing it:
@@ -137,7 +138,7 @@ the network layer.
 npm test
 ```
 
-44 tests: the sign-in door, its clearing, the interception guard, the mode choice, the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
+59 tests: that nothing deletes session data, the sign-in door, the interception guard, the mode choice, the zoom steps, and a scanner that fails if any definition starts calling itself, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
 may never share one), the user agent per mode, the sign-in decision, the IPC
 channels, and an architecture test that fails if an injector, a page script or a
 second zoom mechanism ever comes back.

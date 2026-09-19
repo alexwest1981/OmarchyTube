@@ -66,12 +66,12 @@ test('profilfönstret är fullskärm, och det är inte maximize()', () => {
     assert.ok(!code.includes('.maximize()'), 'maximize() är tillbaka — den biter inte mot Hyprlands tilning');
 });
 
-test('dörren är ETT ställe med tre vägar in', () => {
-    // Vägarna: ett klick på YouTubes inloggning (popup eller navigering), F2, eller
-    // en utloggad profil som startar i TV-läget. Alla tre går genom openSignInDoor.
+test('dörren är ETT ställe med två vägar in', () => {
+    // Vägarna: ett klick på YouTubes inloggning (fångad i popup eller navigering) och
+    // en profil som startar i TV-läget. F2 tar den INTE — F2 => dörr => städning var
+    // vägen som dödade sessionen.
     const calls = code.match(/openSignInDoor\(/g) || [];
-    assert.strictEqual(calls.length, 4, `openSignInDoor förekommer ${calls.length} gånger (definitionen + tre vägar in)`);
-    assert.match(code, /if \(currentMode === 'tv'\) \{\s*openSignInDoor\(/, 'F2 tar inte dörren');
+    assert.strictEqual(calls.length, 3, `openSignInDoor förekommer ${calls.length} gånger (definitionen + två vägar in)`);
     assert.match(code, /if \(plan\.signIn\) \{\s*openSignInDoor\(/, 'starten tar inte dörren');
 });
 
@@ -83,24 +83,39 @@ test('dörren är idempotent — den städar inte om den redan är öppen', () =
         'dörren kan öppnas om och städa mitt i en pågående inloggning');
 });
 
-test('dörren städar besökskakorna innan TV-sidan laddas', () => {
-    // Mätt 2026-09-19: med besökskakor i partitionen visar TV-appen sitt FLÖDE
-    // ("Recommended"/"New to you") i stället för inloggningen — ingen QR-kod finns
-    // då någonstans, och ett klick på Sign in ledde rakt tillbaka till flödet.
-    // Ordningen spelar roll: städa först, ladda sedan.
-    const door = code.match(/async function openSignInDoor[\s\S]*?\n\}/);
-    assert.ok(door, 'hittade ingen openSignInDoor');
-    const clear = door[0].indexOf('await forgetVisitor(');
-    const load = door[0].indexOf('win.loadURL(plan.url)');
-    assert.ok(clear !== -1, 'dörren städar inte besökskakorna');
-    assert.ok(clear < load, 'dörren laddar sidan innan kakorna är städade');
+test('appen raderar ALDRIG sessionsdata', () => {
+    // 2026-09-19 small hela flödet på att dörren städade profilens kakor och lokala
+    // lagring "för att få fram inloggningen": TV-appen håller sin session där, så
+    // varje F2 betydde en ny QR-inloggning. Alex: "exakt samma visa hela tiden".
+    // Regeln är nu absolut: ingenting i src/ får ta bort något ur en profil.
+    const forbidden = ['clearStorageData', 'cookies.remove', 'clearData', 'clearCache'];
+    for (const call of forbidden) {
+        assert.ok(!code.includes(call), `src/main.js innehåller ${call} — appen får inte radera sessionsdata`);
+    }
 });
 
-test('städningen rör aldrig ett konto', () => {
-    const guard = code.match(/async function forgetVisitor[\s\S]*?\n\}/);
-    assert.ok(guard, 'hittade ingen forgetVisitor');
-    assert.match(guard[0], /if \(isSignedIn\(cookies\)\) \{[\s\S]{0,120}return false;/, 'städningen kontrollerar inte om kontot finns');
-    assert.match(guard[0], /cookies\.remove\(/, 'städningen tar inga kakor');
+test('dörren städar ingenting — den byter bara sida', () => {
+    const door = code.match(/async function openSignInDoor[\s\S]*?\n\}/);
+    assert.ok(door, 'hittade ingen openSignInDoor');
+    assert.ok(!/remove|clear|delete/i.test(door[0].replace(/\/\/.*/g, '')),
+        'dörren tar bort något — det var felet som krävde en ny QR varje gång');
+    assert.match(door[0], /win\.loadURL\(plan\.url\)/, 'dörren laddar inte sin sida');
+});
+
+test('F2 växlar läge och rör ingenting annat', () => {
+    // F2 => dörren => städning var exakt den väg som dödade sessionen.
+    const handler = code.match(/if \(input\.key === 'F2'\) \{[\s\S]*?\n        \}/);
+    assert.ok(handler, 'hittade ingen F2-hanterare');
+    assert.match(handler[0], /switchMode\(currentMode === 'tv' \? 'desktop' : 'tv', \{ persist: true \}\)/,
+        'F2 växlar inte läget som ett sparat val');
+    assert.ok(!handler[0].includes('openSignInDoor'), 'F2 öppnar dörren — den vägen dödade sessionen');
+    assert.ok(!handler[0].includes('sessionCookies'), 'F2 läser sessionen — onödigt och farligt');
+});
+
+test('starten skriver ut hela kakinventariet', () => {
+    // Gissningar om var sessionen bor har kostat nog. Loggen skall svara.
+    assert.match(code, /logCookieInventory\(profile, cookies\)/, 'inventariet loggas inte vid start');
+    assert.match(code, /cookie\.domain/, 'inventariet visar inte kakornas domän');
 });
 
 test('en vakt per ruta, och den går tillbaka till användarens läge', () => {
@@ -140,16 +155,6 @@ test('fångsten gäller bara skrivbordsläget — dörren äger sin egen inloggn
         'navigeringsfångsten gäller även i TV-läget eller för en inloggad ruta — då kapas inloggningen eller kastas man tillbaka till TV');
     assert.match(code, /if \(isBlockedSignIn\(url\)\) \{[\s\S]{0,300}if \(currentMode === 'desktop' && !isSignedInCached\(win\)\) routeToSignInDoor\(win\);/,
         'popup-fångsten gäller även i TV-läget eller för en inloggad ruta');
-});
-
-test('städningen tar lokal lagring också, inte bara kakor', () => {
-    // Mätt: städade kakor räckte inte — TV-appen kände ändå igen en återkommande
-    // besökare och visade flödet i stället för inloggningen.
-    const guard = code.match(/async function forgetVisitor[\s\S]*?\n\}/);
-    assert.match(guard[0], /clearStorageData\(/, 'den lokala lagringen städas inte');
-    assert.match(guard[0], /storages: \['localstorage'/, 'localstorage saknas i städningen');
-    // Ursprungslistan måste vara verklig: med [] städas ingenting medan koden ser rätt ut.
-    assert.match(guard[0], /for \(const origin of \['https:\/\/www\.youtube\.com'/, 'städningen går inte över något ursprung');
 });
 
 test("'closed' läser aldrig webContents, som redan är förstörd", () => {

@@ -52,6 +52,13 @@ one that gets denser.
 
 ## Why sign-in goes through the TV screen
 
+One thing the TV app does on its own is skip the sign-in screen: with visitor
+cookies already in the profile it opens its normal feed instead
+(*Recommended*, *New to you*) and there is **no QR code** anywhere on it — measured,
+that is where clicking *Sign in* led. So the app clears the profile's visitor
+cookies right before it opens the door. Only when there is no account: an existing
+session is never touched.
+
 The obvious route — YouTube's normal password form — is closed to every
 embedded browser. That is why the app intercepts it instead of showing it:
 clicking *Sign in* on YouTube's page would land on a Google error in the app's
@@ -103,7 +110,7 @@ the network layer.
 npm test
 ```
 
-37 tests: the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
+40 tests: the sign-in door and its clearing, the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
 may never share one), the user agent per mode, the sign-in decision, the IPC
 channels, and an architecture test that fails if an injector, a page script or a
 second zoom mechanism ever comes back.

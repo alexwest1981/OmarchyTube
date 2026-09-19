@@ -222,6 +222,7 @@ function createWindow(profile) {
     });
     win.on('closed', () => {
         windowProfiles.delete(contentsId);
+        watchedWindows.delete(contentsId);
         if (mainWindow === win) mainWindow = null;
     });
 
@@ -327,10 +328,15 @@ function switchMode(newMode) {
     applyMode(newMode);
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
-    win.loadURL(pageForMode(currentMode));
-    // TV-läget ÄR dörren: står man där skall appen gå tillbaka till användarens
-    // läge så fort kontot finns, annars blir dörren ett rum man fastnar i.
-    if (currentMode === 'tv') watchForSignIn(win, session.fromPartition(partitionOfWindow(win)));
+
+    // TV-läget ÄR dörren: rätt sida, städade besökskakor, och vakten som går
+    // tillbaka till användarens läge så fort kontot finns — annars blir dörren ett
+    // rum man fastnar i.
+    if (currentMode === 'tv') {
+        openSignInDoor(win, session.fromPartition(partitionOfWindow(win)));
+        return;
+    }
+    win.loadURL(pageForMode('desktop'));
 }
 
 // Profilen öppnar sin vanliga sida i det läge användaren valt — även utloggad, för
@@ -343,13 +349,13 @@ function startWithProfile(win, customSession) {
         .then((cookies) => {
             const plan = planForSession(cookies, currentMode);
             if (plan.mode !== currentMode) applyMode(plan.mode);
+            if (plan.signIn) {
+                openSignInDoor(win, customSession);
+                return;
+            }
             win.loadURL(plan.url);
             logViewport(win);
-            if (plan.signIn) {
-                console.log('[OmarchyTube] Inloggningsdörren: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
-                win.setTitle('OmarchyTube — tryck Enter för QR-koden');
-                watchForSignIn(win, customSession);
-            } else if (!plan.signedIn) {
+            if (!plan.signedIn) {
                 // Utloggad i skrivbordsläget: sidan ser ut som YouTube och lyder
                 // zoom. Dörren öppnas när Google-inloggningen faktiskt försöks.
                 console.log('[OmarchyTube] Utloggad profil i skrivbordsläget. Google vägrar sitt lösenordsformulär i en inbäddad webbläsare — appen byter till TV-dörren (QR-koden) när du försöker logga in, eller med F2.');
@@ -361,17 +367,45 @@ function startWithProfile(win, customSession) {
         });
 }
 
-// Googles lösenordsväg är stängd för inbäddade webbläsare. I stället för att visa
-// deras blockerade formulär går appen till den dörr Google öppnar: TV-appens
-// QR-kod. EN funktion, två vägar in (popup och navigering).
-function routeToSignInDoor(win) {
+// TV-appen hoppar FÖRBI inloggningsrutan när partitionen redan har besökskakor: den
+// visar sitt vanliga flöde ("Recommended"/"New to you") i stället, och där finns
+// ingen QR-kod. Mätt 2026-09-19 hos Alex — ett klick på Sign in gav flödet, ingen
+// kod. Med tom partition kommer "Get started" först (mätt 2026-09-18 mot
+// youtube.com/tv). Städningen rör därför bara besökarens egna kakor: finns ett
+// konto (SID) rörs ingenting, och en städad besökare kostar ingenting att bygga upp
+// igen.
+async function forgetVisitor(targetSession) {
+    const cookies = await targetSession.cookies.get({ domain: '.youtube.com' });
+    if (isSignedIn(cookies)) return false;
+
+    await Promise.all(cookies.map((cookie) =>
+        targetSession.cookies.remove('https://www.youtube.com/', cookie.name).catch(() => {})));
+    console.log(`[OmarchyTube] Städade ${cookies.length} besökskakor, så TV-appen visar inloggningen i stället för flödet.`);
+    return true;
+}
+
+// Dörren. ETT ställe, tre vägar in: ett klick på YouTubes inloggning (fångad i
+// popup eller navigering), F2, eller en utloggad profil som startar i TV-läget.
+async function openSignInDoor(win, targetSession) {
     if (!win || win.isDestroyed()) return;
+    await forgetVisitor(targetSession);
+    if (win.isDestroyed()) return;
+
     const plan = signInPlan();
-    console.log('[OmarchyTube] Google-inloggning i en inbäddad webbläsare är stängd — öppnar TV-dörren (QR-koden).');
     applyMode(plan.mode);
     win.loadURL(plan.url);
+    console.log('[OmarchyTube] Inloggningsdörren: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
+    win.setTitle('OmarchyTube — tryck Enter för QR-koden');
     logViewport(win);
-    watchForSignIn(win, session.fromPartition(partitionOfWindow(win)));
+    watchForSignIn(win, targetSession);
+}
+
+// Googles lösenordsväg är stängd för inbäddade webbläsare. I stället för att visa
+// deras blockerade formulär går appen till den dörr Google öppnar: TV-appens QR-kod.
+function routeToSignInDoor(win) {
+    if (!win || win.isDestroyed()) return;
+    console.log('[OmarchyTube] Google-inloggning i en inbäddad webbläsare är stängd — öppnar TV-dörren (QR-koden).');
+    openSignInDoor(win, session.fromPartition(partitionOfWindow(win)));
 }
 
 function partitionOfWindow(win) {
@@ -387,7 +421,11 @@ const SIGN_IN_POLL_MS = 3000;
 // ponytail: ger upp efter tio minuter; gör det till en inställning om någon vill vakta längre
 const SIGN_IN_WATCH_MS = 10 * 60 * 1000;
 
+const watchedWindows = new Set();
+
 function watchForSignIn(win, customSession) {
+    if (watchedWindows.has(win.webContents.id)) return; // en vakt per ruta
+    watchedWindows.add(win.webContents.id);
     const started = Date.now();
     const timer = setInterval(() => {
         if (win.isDestroyed() || Date.now() - started > SIGN_IN_WATCH_MS) {
@@ -399,6 +437,7 @@ function watchForSignIn(win, customSession) {
                 if (!isSignedIn(cookies)) return; // fortfarande utloggad
                 const mode = readState().mode || 'desktop';
                 clearInterval(timer);
+                watchedWindows.delete(win.webContents.id);
                 if (win.isDestroyed()) return;
                 console.log(`[OmarchyTube] Kontot finns i sessionen — tillbaka till ${mode}-läget.`);
                 applyMode(mode);

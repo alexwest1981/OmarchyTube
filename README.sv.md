@@ -52,6 +52,13 @@ blir tätare.
 
 ## Varför inloggningen går via TV-skärmen
 
+En sak TV-appen gör på egen hand är att hoppa förbi inloggningsrutan: har
+profilen redan besökskakor öppnar den sitt vanliga flöde (*Recommended*, *New to
+you*) i stället, och där finns **ingen QR-kod** någonstans — mätt, och det var dit
+ett klick på *Sign in* ledde. Därför städar appen bort profilens besökskakor precis
+innan den öppnar dörren. Bara när det inte finns något konto: en befintlig session
+rörs aldrig.
+
 Den uppenbara vägen — YouTubes vanliga lösenordsformulär — är stängd för varje
 inbäddad webbläsare. Därför fångar appen den i stället för att visa den: ett klick
 på *Logga in* på YouTubes sida skulle landa i ett Google-fel i appens eget fönster,
@@ -101,7 +108,7 @@ läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 npm test
 ```
 
-37 prov: zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
+40 prov: dörren och dess städning, zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
 aldrig dela en), webbläsaridentiteten per läge, inloggningsbeslutet, IPC-kanalerna,
 och ett arkitekturprov som fäller om en injektor, ett zoom-anrop eller ett
 sidskript kommer tillbaka.

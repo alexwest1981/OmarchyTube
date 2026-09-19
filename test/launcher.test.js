@@ -3,10 +3,12 @@
 // Varje påstående här kommer ur en mätning 2026-09-18:
 //   * injicerad CSS (oskopad #container) la YouTubes skrivbordssida i ett band
 //     högst upp med resten bortklippt;
-//   * setZoomFactor(0.49) blev dpr 0,49 på Wayland och satte innehållet i en
-//     fjärdedels ruta;
+//   * zoom-experimentet bet inte: setZoomLevel(0) nollställde faktorn i nästa
+//     andetag, och kvartsfönstret var injektorns sju #container;
 //   * två fönster sida vid sida gjorde YouTubes TV-app oläslig;
-//   * en webbläsare som startades vid sidan av appen var inte vad Alex ville.
+//   * en webbläsare som startades vid sidan av appen var inte vad Alex ville;
+//   * en besökskaka i partitionen fick TV-appen att visa sitt flöde i stället för
+//     inloggningen, så QR-koden aldrig kom upp (mätt 2026-09-19).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -64,11 +66,38 @@ test('profilfönstret är fullskärm, och det är inte maximize()', () => {
     assert.ok(!code.includes('.maximize()'), 'maximize() är tillbaka — den biter inte mot Hyprlands tilning');
 });
 
-test('utloggad profil vaktas tills kontot finns, då blir det användarens läge', () => {
-    // TV-vägen är bara en inloggningsdörr: 10-fotslayouten lyder inte zoom och ser
-    // grotesk ut i ett fönster.
+test('dörren är ETT ställe med tre vägar in', () => {
+    // Vägarna: ett klick på YouTubes inloggning (popup eller navigering), F2, eller
+    // en utloggad profil som startar i TV-läget. Alla tre går genom openSignInDoor.
+    const calls = code.match(/openSignInDoor\(/g) || [];
+    assert.strictEqual(calls.length, 4, `openSignInDoor förekommer ${calls.length} gånger (definitionen + tre vägar in)`);
+    assert.match(code, /if \(currentMode === 'tv'\) \{\s*openSignInDoor\(/, 'F2 tar inte dörren');
+    assert.match(code, /if \(plan\.signIn\) \{\s*openSignInDoor\(/, 'starten tar inte dörren');
+});
+
+test('dörren städar besökskakorna innan TV-sidan laddas', () => {
+    // Mätt 2026-09-19: med besökskakor i partitionen visar TV-appen sitt FLÖDE
+    // ("Recommended"/"New to you") i stället för inloggningen — ingen QR-kod finns
+    // då någonstans, och ett klick på Sign in ledde rakt tillbaka till flödet.
+    // Ordningen spelar roll: städa först, ladda sedan.
+    const door = code.match(/async function openSignInDoor[\s\S]*?\n\}/);
+    assert.ok(door, 'hittade ingen openSignInDoor');
+    const clear = door[0].indexOf('await forgetVisitor(');
+    const load = door[0].indexOf('win.loadURL(plan.url)');
+    assert.ok(clear !== -1, 'dörren städar inte besökskakorna');
+    assert.ok(clear < load, 'dörren laddar sidan innan kakorna är städade');
+});
+
+test('städningen rör aldrig ett konto', () => {
+    const guard = code.match(/async function forgetVisitor[\s\S]*?\n\}/);
+    assert.ok(guard, 'hittade ingen forgetVisitor');
+    assert.match(guard[0], /if \(isSignedIn\(cookies\)\) return false;/, 'städningen kontrollerar inte om kontot finns');
+    assert.match(guard[0], /cookies\.remove\(/, 'städningen tar inga kakor');
+});
+
+test('en vakt per ruta, och den går tillbaka till användarens läge', () => {
+    assert.match(code, /watchedWindows\.has\(win\.webContents\.id\)/, 'ingen spärr mot staplade vakter');
     assert.match(code, /customSession\.cookies\.get\(\{ domain: '\.youtube\.com' \}\)/, 'ingen vakt på sessionen');
-    assert.match(code, /watchForSignIn\(win, customSession\)/, 'vakten kopplas inte in');
     assert.match(code, /Kontot finns i sessionen[\s\S]{0,400}loadURL\(pageForMode\(mode\)\)/, 'appen går inte tillbaka till användarens läge efter inloggning');
 });
 

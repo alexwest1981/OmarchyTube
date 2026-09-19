@@ -234,7 +234,8 @@ function watchForLogin() {
             loginCode.textContent = info.code;
             loginStatusText.textContent = 'Skriv koden på mobilen, eller skanna:';
         } else if (info.open && !info.code) {
-            loginStatusText.textContent = 'Hämtar en kod …';
+            const text = info.status || 'Hämtar en kod …';
+            if (loginStatusText.textContent !== text) loginStatusText.textContent = text;
         }
         if (info.qr && loginQr.src !== info.qr) {
             loginQr.src = info.qr;

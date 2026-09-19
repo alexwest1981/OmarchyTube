@@ -9,7 +9,7 @@
 // utan konto — därför är sökning appens ingång.
 const { net } = require('electron');
 const { extractItems } = require('./innertube-extract');
-const { signedIn, accessToken } = require('./auth');
+const { partition } = require('./account');
 
 // Nyckeln youtube.com själv skickar till sina egna sidor via ytcfg. Ingen
 // hemlighet, inte knuten till något konto.
@@ -28,18 +28,19 @@ const CONTEXT = {
 // mätt 2026-09-19 (mq 320x180, hq 480x360, sd 640x480, hq720 1280x720).
 const thumbUrl = (videoId) => `https://i.ytimg.com/vi/${videoId}/hq720.jpg`;
 
-// Är du inloggad följer din access-token med. Det är den som gör flödet
-// personligt — utan den svarar YouTube 400 eller tomt (mätt 2026-09-19).
-async function headers() {
-    const base = { 'Content-Type': 'application/json' };
-    return signedIn() ? { ...base, Authorization: `Bearer ${await accessToken()}` } : base;
-}
+// Sessionen följer med: anropen går i appens partition, där kontots kakor bor.
+// Det är de som gör flödet personligt — utan konto svarar YouTube 400 eller
+// tomt (mätt 2026-09-19). Anropen presenterar sig som en vanlig webbläsare;
+// bara inloggningsdörren behöver TV-identiteten.
+const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+const headers = () => ({ 'Content-Type': 'application/json', 'User-Agent': UA });
 
 async function post(endpoint, body) {
     const url = `https://www.youtube.com/youtubei/v1/${endpoint}?key=${API_KEY}&prettyPrint=false`;
     const response = await net.fetch(url, {
         method: 'POST',
-        headers: await headers(),
+        headers: headers(),
+        session: partition(),
         body: JSON.stringify({ context: CONTEXT, ...body }),
     });
     if (!response.ok) throw new Error(`${endpoint} svarade ${response.status}`);
@@ -62,8 +63,23 @@ async function run(what, endpoint, body) {
 
 const search = (query) => run(`sök "${query}"`, 'search', { query });
 
-// YouTubes egna rekommendationsflöde. Det kräver ett konto — utan token svarar
-// YouTube tomt, och då säger appen det i stället för att visa en tom ruta.
+// YouTubes egna flöden. De kräver ett konto — utan konto svarar YouTube tomt
+// eller 400, och då säger appen det i stället för att visa en tom ruta.
 const recommended = () => run('rekommenderat', 'browse', { browseId: 'FEwhat_to_watch' });
 
-module.exports = { search, recommended, thumbUrl, API_KEY, CONTEXT };
+// Din feed: de nyaste videorna från kanalerna du följer. Namnet är YouTubes
+// eget; provar kandidaterna i tur och ordning och loggar vilken som svarade.
+const SUBSCRIPTION_FEEDS = ['FEsubscriptions', 'FEchannels'];
+async function subscriptionsFeed() {
+    let lastError = null;
+    for (const browseId of SUBSCRIPTION_FEEDS) {
+        try {
+            const items = await run(`feed ${browseId}`, 'browse', { browseId });
+            if (items.length) return items;
+        } catch (err) { lastError = err; }
+    }
+    if (lastError) throw lastError;
+    return [];
+}
+
+module.exports = { search, recommended, subscriptionsFeed, thumbUrl, API_KEY, CONTEXT };

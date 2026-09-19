@@ -21,14 +21,10 @@
     <p id="notice" hidden></p>
 
     <section id="login" hidden>
-        <h2>Logga in på YouTube</h2>
-        <p>Skapa en OAuth-klient av typen <b>TVs and limited-input devices</b> i Google Cloud-konsolen och klistra in id och hemlighet här. Det görs en gång — sedan äger appen sin egen nyckel. Inga kakor, ingen webbläsare, ingen inloggning som kan loopa.</p>
-        <label>Klient-id <input id="client-id" placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false"></label>
-        <label>Klienthemlighet <input id="client-secret" placeholder="GOCSPX-…" autocomplete="off" spellcheck="false"></label>
-        <button type="button" id="save-client">Spara och hämta kod</button>
-        <button type="button" id="logout" hidden>Logga ut</button>
+        <h2>Logga in</h2>
+        <p>Ett fönster öppnas med YouTubes egen inloggning för TV-appar. Skanna koden med telefonens kamera (eller skriv in den på <b>yt.be/activate</b>) — ungefär som när du loggar in på en TV. Sedan är appen inloggad, och sessionen stannar här.</p>
+        <button type="button" id="open-login">Öppna inloggningen</button>
         <p id="login-status"></p>
-        <p id="login-code" hidden></p>
     </section>
 
     <main id="grid" tabindex="-1"></main>

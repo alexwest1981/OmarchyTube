@@ -1,57 +1,78 @@
-// Låser den nya arkitekturen: vår app, YouTubes data.
+// Låser den nya arkitekturen: vår app, YouTubes data, användarens konto.
 //
-// Proverna är skrivna för att bita på det som faktiskt gick sönder: appen skall
-// inte kunna röra en session, inte ladda en YouTube-sida, inte injicera något i
-// en sida den inte äger, och spelaren skall ha den formatväljare som är mätt
-// fungerande. Allt annat får ändras fritt.
+// Proverna biter på det som faktiskt gick sönder: appen skall inte kunna radera
+// en session (det var hela inloggningsloopen), inte ladda en YouTube-sida i
+// rutnätet, inte kräva att användaren bygger en egen OAuth-app, och spelaren
+// skall ha den formatväljare som är mätt fungerande.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const SRC = path.join(__dirname, '..', 'src');
-const files = () => fs.readdirSync(SRC).filter((f) => f.endsWith('.js')).map((f) => [f, fs.readFileSync(path.join(SRC, f), 'utf8')]);
-const all = () => files().map(([, src]) => src).join('\n');
+const read = (file) => fs.readFileSync(path.join(SRC, file), 'utf8');
+const files = () => fs.readdirSync(SRC).filter((f) => f.endsWith('.js'));
+const all = () => files().map(read).join('\n');
 
-test('appen rör aldrig en session — ingen kakburk, ingen lagring', () => {
+test('appen raderar aldrig sessionsdata — det var inloggningsloopen', () => {
     const src = all();
-    for (const forbidden of ['clearStorageData', 'cookies.remove', 'cookies.set', 'flushStorageData']) {
+    for (const forbidden of ['clearStorageData', 'cookies.remove', 'cookies.set', 'storageData.remove']) {
         assert.ok(!src.includes(forbidden), `${forbidden} får inte finnas i src/`);
     }
 });
 
-test('ingen YouTube-sida laddas och inget injiceras', () => {
+test('sessionen skrivs till disk, annars börjar nästa start om', () => {
+    assert.match(read('account.js'), /flushStorageData/, 'dörren skall skriva sessionen till disk när kontot syns');
+    assert.match(read('main.js'), /flushStorageData/, 'appen skall skriva sessionen till disk innan den avslutas');
+});
+
+test('bara dörren laddar en YouTube-adress, och bara TV-appens sida', () => {
+    const loaded = [...all().matchAll(/loadURL\(([^)]*)\)/g)].map((m) => m[1]);
+    assert.deepStrictEqual(loaded, ['DOOR_URL'], `bara dörrens adress får laddas, hittade: ${loaded.join(', ')}`);
+    assert.match(read('account.js'), /youtube\.com\/tv/, 'dörren skall vara TV-appens sida');
+});
+
+test('ingen injektion i någon sida', () => {
     const src = all();
-    for (const forbidden of ['loadURL', 'insertCSS', 'executeJavaScript', 'setUserAgent', 'setZoomFactor']) {
+    for (const forbidden of ['insertCSS', 'executeJavaScript']) {
         assert.ok(!src.includes(forbidden), `${forbidden} får inte finnas i src/`);
     }
+});
+
+test('kontomarkörerna innehåller LOGIN_INFO — den som saknades', () => {
+    assert.match(read('account.js'), /'LOGIN_INFO'/, 'LOGIN_INFO är YouTubes egen kontomarkör');
 });
 
 test('ingen webbläsare startas — mpv är den enda externa processen', () => {
-    const spawned = [...all().matchAll(/spawn\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+    const spawned = [...all().matchAll(/spawn\(\s*['"]([^']+)['"]/g)].map((m) => m[1]);
     assert.deepStrictEqual([...new Set(spawned)], ['mpv'], `bara mpv får startas, hittade: ${spawned.join(', ')}`);
 });
 
+test('användaren skall inte behöva bygga en egen OAuth-app', () => {
+    const src = all();
+    for (const gone of ['apps.googleusercontent.com', 'client_secret', 'GOCSPX']) {
+        assert.ok(!src.includes(gone), `${gone} hörde till klientspåret som riven`);
+    }
+});
+
 test('spelaren har formatväljaren som är mätt fungerande', () => {
-    // Utan den: HTTP 403 på videoströmmen (mätt 2026-09-19). Konstanten mäts,
-    // inte strängen i filen — annars vore provet teater.
     const { FORMAT } = require(path.join(SRC, 'player.js'));
     assert.strictEqual(FORMAT, 'bv*+ba/b');
 });
 
 test('rutnätet hämtar 1280x720, inte träfflistans 720x404', () => {
-    const src = fs.readFileSync(path.join(SRC, 'browse.js'), 'utf8');
-    assert.match(src, /hq720/, 'browse.js skall bygga hq720-URL:er');
+    const src = read('browse.js');
+    assert.match(src, /hq720/);
     assert.ok(!/img\.src = item\.thumbnail;\n/.test(src), 'träfflistans bild får bara vara reserv');
 });
 
 test('video-id valideras innan det når mpv', () => {
-    assert.match(fs.readFileSync(path.join(SRC, 'main.js'), 'utf8'), /\^\[\\w-\]\{11\}\$/);
+    assert.match(read('main.js'), /\^\[\\w-\]\{11\}\$/);
 });
 
-test('appen har ingen inloggning att hamna i en loop i', () => {
+test('allting sker i appen — ingen extern webbläsare någonstans', () => {
     const src = all();
-    for (const forbidden of ['sign-in', 'SignIn', 'LOGIN_INFO', 'SAPISID']) {
-        assert.ok(!src.includes(forbidden), `${forbidden} hör till den rivna arkitekturen`);
+    for (const forbidden of ['xdg-open', 'browser-launch', 'shell.openExternal']) {
+        assert.ok(!src.includes(forbidden), `${forbidden} får inte finnas i src/`);
     }
 });

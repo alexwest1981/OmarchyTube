@@ -176,15 +176,12 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
 }, true);
 
-window.addEventListener('DOMContentLoaded', start);
 
 // ---- flikar, feed och inloggning ------------------------------------------
 const tabs = document.getElementById('tabs');
 const loginPanel = document.getElementById('login');
 const loginStatusText = document.getElementById('login-status');
-const loginCode = document.getElementById('login-code');
-const logoutButton = document.getElementById('logout');
-let pollTimer = null;
+let accountTimer = null;
 
 function showNotice(text) {
     notice.hidden = !text;
@@ -198,7 +195,7 @@ function setTab(name) {
 // Flikarna som kräver ett konto säger ifrån i klartext i stället för att visa en
 // tom ruta — och öppnar inloggningen, som är enda vägen dit.
 async function feed(name) {
-    const label = { recommended: 'Rekommenderat', latest: 'Senaste från din feed', subscriptions: 'Mina kanaler' }[name] || name;
+    const label = { recommended: 'Rekommenderat', latest: 'Senaste från din feed' }[name] || name;
     status.textContent = `Hämtar ${label}…`;
     setTab(name);
     try {
@@ -214,69 +211,51 @@ async function feed(name) {
         render();
         status.textContent = '';
         showNotice(`Kunde inte hämta ${label.toLowerCase()}: ${err.message}`);
-        if (/inlogg|token|401|403/i.test(String(err.message))) openLogin();
-    }
-}
-
-async function loadChannelVideos(item) {
-    status.textContent = `Hämtar ${item.title}…`;
-    try {
-        const items = await withTimeout(window.omarchyBridge.channelVideos(item.channelId));
-        state.items = items;
-        state.index = 0;
-        render();
-        grid.focus();
-        showNotice(`${item.title}: ${items.length} videor. Esc rensar.`);
-        status.textContent = `${items.length} videor`;
-    } catch (err) {
-        showNotice(`Kunde inte hämta kanalen: ${err.message}`);
+        openLogin();
     }
 }
 
 function openLogin() {
     loginPanel.hidden = false;
-    if (!loginStatusText.textContent) loginStatusText.textContent = 'Klistra in klient-id och hemlighet. Sedan visas en kod du bekräftar på mobilen eller i en webbläsare.';
-    document.getElementById('client-id').focus();
+    if (!loginStatusText.textContent) loginStatusText.textContent = 'Inget konto än. Tryck på knappen — inloggningen sköter resten.';
+    document.getElementById('open-login').focus();
 }
 
-function showCode(started) {
-    loginCode.hidden = false;
-    loginCode.textContent = started.userCode;
-    loginStatusText.textContent = `Öppna ${started.url} och skriv in koden ovan. Appen väntar.`;
-    clearInterval(pollTimer);
-    pollTimer = setInterval(async () => {
-        try {
-            const result = await window.omarchyBridge.loginStatus();
-            if (result.state === 'väntar') return;
-            clearInterval(pollTimer);
-            if (result.state === 'klar') {
-                loginPanel.hidden = true;
-                loginCode.hidden = true;
-                logoutButton.hidden = false;
-                showNotice('Inloggad.');
-                feed('latest');
-            } else {
-                loginStatusText.textContent = `Inloggningen: ${result.state}${result.message ? ' — ' + result.message : ''}`;
-            }
-        } catch (err) {
-            clearInterval(pollTimer);
-            loginStatusText.textContent = `Fel: ${err.message}`;
+// Dörren är ett eget fönster; här väntar vi bara på att kontot syns i sessionen.
+function watchForAccount() {
+    clearInterval(accountTimer);
+    let ticks = 0;
+    accountTimer = setInterval(async () => {
+        ticks += 1;
+        const account = await window.omarchyBridge.account().catch(() => ({ signedIn: false }));
+        if (account.signedIn) {
+            clearInterval(accountTimer);
+            loginPanel.hidden = true;
+            showNotice(`Inloggad (${account.markers.join(', ')}).`);
+            feed('recommended');
+        } else if (ticks % 10 === 0) {
+            loginStatusText.textContent = 'Väntar på att du bekräftar koden i telefon…';
         }
     }, 2000);
 }
 
 async function start() {
     const account = await window.omarchyBridge.account().catch(() => ({ signedIn: false }));
-    logoutButton.hidden = !account.signedIn;
     if (account.signedIn) {
         setTab('recommended');
         feed('recommended');
     } else {
         setTab('search');
         openLogin();
-        showNotice('Sök fungerar utan konto. För din lista, din feed och rekommendationerna: logga in nedan.');
+        showNotice('Sök fungerar utan konto. För din feed och rekommendationerna: logga in — ett fönster med en kod, inget att fylla i.');
     }
 }
+
+document.getElementById('open-login').addEventListener('click', async () => {
+    loginStatusText.textContent = 'Fönstret är öppet. Skanna koden med telefonen.';
+    await window.omarchyBridge.openLogin();
+    watchForAccount();
+});
 
 tabs.addEventListener('click', (event) => {
     const button = event.target.closest('button');
@@ -286,20 +265,4 @@ tabs.addEventListener('click', (event) => {
     if (button.dataset.tab) feed(button.dataset.tab);
 });
 
-document.getElementById('save-client').addEventListener('click', async () => {
-    const id = document.getElementById('client-id').value.trim();
-    const secret = document.getElementById('client-secret').value.trim();
-    if (!id || !secret) { loginStatusText.textContent = 'Både klient-id och hemlighet behövs.'; return; }
-    try {
-        await window.omarchyBridge.saveClient(id, secret);
-        showCode(await window.omarchyBridge.startLogin());
-    } catch (err) {
-        loginStatusText.textContent = `Google svarade: ${err.message}`;
-    }
-});
-
-logoutButton.addEventListener('click', async () => {
-    await window.omarchyBridge.loggedOut();
-    logoutButton.hidden = true;
-    openLogin();
-});
+window.addEventListener('DOMContentLoaded', start);

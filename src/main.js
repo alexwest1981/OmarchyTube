@@ -1,21 +1,18 @@
 // OmarchyTube — vår egen YouTube-klient.
 //
 // Fönstret, rutnätet och sessionen är våra. YouTube levererar data (InnerTube)
-// och video (mpv + yt-dlp). Ingen YouTube-sida laddas, ingen kaka röres, ingen
-// webbläsare startas: appen kan därför inte hamna i en inloggningsloop — den
-// har ingen inloggning att hamna i.
-const { app, BrowserWindow, ipcMain } = require('electron');
+// och video (mpv + yt-dlp). Ingen YouTube-sida visas i rutnätet, ingen
+// webbläsare startas, och inloggningen är YouTubes egen kod-dörr — ett fönster
+// som visar TV-appens QR, inget annat.
+const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('node:path');
-const { search, recommended } = require('./innertube');
-const feeds = require('./dataapi');
-const auth = require('./auth');
+const { search, recommended, subscriptionsFeed } = require('./innertube');
 const { play, stop } = require('./player');
+const account = require('./account');
 
-// Egen partition: den gamla appens YouTube-kakor får ligga kvar orörda och
-// påverkar inte InnerTube-anropen.
-const PARTITION = 'persist:omarchy-tube-own';
+const PARTITION = account.PARTITION;
 let win = null;
-let pending = null;   // pågående device-kod, en i taget
+let flushed = false;   // sessionen skrivs till disk en gång, inte i en oändlig kedja
 
 function createWindow() {
     win = new BrowserWindow({
@@ -33,9 +30,10 @@ function createWindow() {
     });
 
     win.loadFile(path.join(__dirname, 'browse.html'));
-    win.webContents.on('did-finish-load', () => {
+    win.webContents.on('did-finish-load', async () => {
         const [w, h] = win.getSize();
-        console.log(`[OmarchyTube] rutan ${w}x${h} | fullskärm ${win.isFullScreen()} | sök först, Enter spelar`);
+        const state = await account.accountState();
+        console.log(`[OmarchyTube] rutan ${w}x${h} | fullskärm ${win.isFullScreen()} | ${state.signedIn ? `konto: ${state.markers.join(', ')}` : 'inget konto'}`);
     });
     win.webContents.on('before-input-event', (event, input) => {
         if (input.type !== 'keyDown') return;
@@ -55,35 +53,19 @@ function createWindow() {
 
 ipcMain.handle('search', (_event, query) => search(String(query || '').trim()));
 
-// Flikarna: rekommenderat (YouTubes flöde, kräver konto), senaste (din feed),
-// mina kanaler (din lista). Allt tre säger ifrån i klartext när kontot saknas.
 ipcMain.handle('feed', async (_event, kind) => {
     if (kind === 'recommended') return recommended();
-    if (kind === 'latest') return feeds.latestFromSubscriptions();
-    if (kind === 'subscriptions') {
-        const channels = await feeds.mySubscriptions();
-        console.log(`[OmarchyTube] mina kanaler: ${channels.length}`);
-        return channels.map((c) => ({ kind: 'channel', channelId: c.channelId, title: c.title, channel: 'Kanal', thumbnail: c.avatar }));
-    }
+    if (kind === 'latest') return subscriptionsFeed();
     throw new Error(`okänd flik: ${kind}`);
 });
 
-// Ett klick på en kanal: dess senaste videor.
-ipcMain.handle('channelVideos', async (_event, channelId) => feeds.channelVideos(String(channelId || '')));
+ipcMain.handle('account', () => account.accountState());
 
-ipcMain.handle('loggedOut', () => { auth.forget(); return { signedIn: false }; });
-ipcMain.handle('account', () => ({ signedIn: auth.signedIn(), hasClient: auth.hasClient() }));
-ipcMain.handle('saveClient', (_event, id, secret) => { auth.setClient(String(id || ''), String(secret || '')); return { saved: true }; });
-ipcMain.handle('startLogin', async () => {
-    const started = await auth.start();
-    pending = started;
-    return { userCode: started.userCode, url: started.url, interval: started.interval };
-});
-ipcMain.handle('loginStatus', async () => {
-    if (!pending) return { state: 'ingen pågående inloggning' };
-    const result = await auth.pollOnce(pending.deviceCode);
-    if (result.state === 'klar') pending = null;
-    return result;
+// Inloggningen: YouTubes egen kod-dörr. Renderaren frågar 'account' medan
+// fönstret är öppet, så ingen kanal behövs för att säga till när det är klart.
+ipcMain.handle('openLogin', () => {
+    account.openDoor({ onSignedIn: () => console.log('[OmarchyTube] dörren stängd, kontot i partitionen') });
+    return { opened: true };
 });
 
 ipcMain.handle('play', (_event, videoId) => {
@@ -93,4 +75,13 @@ ipcMain.handle('play', (_event, videoId) => {
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { stop(); app.quit(); });
-app.on('before-quit', stop);
+// Sessionen skall till disk innan appen dör, annars börjar nästa start om.
+app.on('before-quit', (event) => {
+    stop();
+    if (flushed) return;
+    event.preventDefault();
+    flushed = true;
+    session.fromPartition(PARTITION).flushStorageData()
+        .catch((err) => console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message))
+        .finally(() => { console.log('[OmarchyTube] sessionen skriven till disk'); app.quit(); });
+});

@@ -4,11 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('omarchyBridge', {
     search: (query) => ipcRenderer.invoke('search', query),
     feed: (kind) => ipcRenderer.invoke('feed', kind),
-    channelVideos: (channelId) => ipcRenderer.invoke('channelVideos', channelId),
     account: () => ipcRenderer.invoke('account'),
-    saveClient: (id, secret) => ipcRenderer.invoke('saveClient', id, secret),
-    startLogin: () => ipcRenderer.invoke('startLogin'),
-    loginStatus: () => ipcRenderer.invoke('loginStatus'),
-    loggedOut: () => ipcRenderer.invoke('loggedOut'),
+    openLogin: () => ipcRenderer.invoke('openLogin'),
     play: (videoId) => ipcRenderer.invoke('play', videoId),
 });

@@ -85,6 +85,18 @@ test('dörrfönstret skapas med rutnätets partition och TV-identiteten', () => 
     door.close();
 });
 
+test('dörren stänger sig på flödesprovet, inte bara på kaknamn', async () => {
+    kakor.lista = [{ name: 'PREF' }, { name: 'VISITOR_INFO1_LIVE' }];   // inga kontomarkörer alls
+    skapade.length = 0;
+    let klart = null;
+    const door = account.openDoor({ intervalMs: 5, probe: async () => 33, onSignedIn: (state) => { klart = state; } });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    assert.ok(klart, 'dörren stängde sig inte trots att flödet svarade');
+    assert.match(klart.via, /flödet svarade \(33 videor\)/);
+    assert.ok(door.closed, 'fönstret skall vara stängt');
+    kakor.lista = [{ name: 'LOGIN_INFO' }, { name: 'PREF' }];
+});
+
 test('dörren städar ingenting — den bara visar sin kod', () => {
     const door = fs.readFileSync(path.join(SRC, 'account.js'), 'utf8');
     for (const forbidden of ['clearStorageData', 'cookies.remove', 'removeItem', 'deleteDatabase']) {

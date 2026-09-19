@@ -39,7 +39,12 @@ async function accountState(from) {
 
 // Dörren: ett fönster med TV-appen, som visar sin kod och inget annat.
 // onSignedIn kallas när kontot syns i partitionen; fönstret stängs då.
-function openDoor({ onSignedIn, onClosed } = {}) {
+// Två signaler, och den andra är den som avgör: (1) en kontomarkör bland kakorna,
+// (2) att YouTube faktiskt svarar med ett personligt flöde. Den andra är
+// funktionell — den kan inte ha rätt om kaknamn och fel om verkligheten, och den
+// är samma anrop rutnätet behöver ändå. Mätt 2026-09-19: ingen partition på
+// disk hade någonsin kontomarkörer, så signal (1) ensam var en gissning.
+function openDoor({ onSignedIn, onClosed, probe, intervalMs = 2000 } = {}) {
     partition().setUserAgent(TV_UA);   // mätt: med skrivbordsagenten svarar YouTube med en återvändsgränd
     const door = new BrowserWindow({
         width: 1280,
@@ -69,16 +74,26 @@ function openDoor({ onSignedIn, onClosed } = {}) {
         console.log(`[OmarchyTube] partitionen har ${all.length} kakor innan inloggning: ${[...new Set(all.map((c) => c.name))].sort().join(', ') || '(inga)'}`);
     }).catch((err) => console.error('[OmarchyTube] kunde inte läsa partitionen:', err.message));
 
+    let ticks = 0;
     const timer = setInterval(async () => {
-        const state = await accountState(doorSession);
-        if (state.signedIn) {
-            clearInterval(timer);
-            console.log(`[OmarchyTube] inloggad — kontot syns i partitionen (${state.markers.join(', ')})`);
-            await partition().flushStorageData();   // skriv sessionen till disk innan fönstret stängs
-            door.close();
-            if (onSignedIn) onSignedIn(state);
+        ticks += 1;
+        const state = await accountState(doorSession).catch((err) => { console.error('[OmarchyTube] kakfrågan misslyckades:', err.message); return { signedIn: false, markers: [], total: 0 }; });
+        let via = state.signedIn ? `kontomarkör (${state.markers.join(', ')})` : '';
+        if (!via && probe && ticks % 5 === 0) {
+            // Var femte gång (var tionde sekund): fråga YouTube om flödet i stället.
+            const count = await probe().catch((err) => { console.log(`[OmarchyTube] flödesprovet misslyckades: ${err.message}`); return 0; });
+            console.log(`[OmarchyTube] flödesprovet: ${count} videor (efter ${ticks * intervalMs / 1000} s)`);
+            if (count > 0) via = `flödet svarade (${count} videor)`;
         }
-    }, 2000);
+        if (ticks % 5 === 0 && !via) console.log(`[OmarchyTube] väntar på inloggning (${ticks * intervalMs / 1000} s, ${state.total} kakor i partitionen)`);
+        if (via) {
+            clearInterval(timer);
+            console.log(`[OmarchyTube] inloggad — ${via}`);
+            await partition().flushStorageData().catch((err) => console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message));
+            door.close();
+            if (onSignedIn) onSignedIn({ ...state, via });
+        }
+    }, intervalMs);
 
     door.on('closed', async () => {
         clearInterval(timer);

@@ -5,7 +5,25 @@
 // webbläsare startas, och inloggningen är YouTubes egen kod-dörr — ett fönster
 // som visar TV-appens QR, inget annat.
 const { app, BrowserWindow, ipcMain, session } = require('electron');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+
+// Loggen hamnar också i en fil: då kan felet läsas i efterhand i stället för att
+// någon skall klistra in en skärmdump (appens utdata försvinner med terminalen).
+const LOG_FILE = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state'), 'omarchy-tube', 'log.txt');
+try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    if (fs.statSync(LOG_FILE).size > 1_000_000) fs.truncateSync(LOG_FILE);   // ponytail: en fil, ingen rotation
+    fs.appendFileSync(LOG_FILE, `\n=== start ${new Date().toISOString()} ===\n`);
+} catch (err) { /* loggfilen är en bekvämlighet, inte ett krav */ }
+for (const level of ['log', 'error']) {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+        original(...args);
+        try { fs.appendFileSync(LOG_FILE, args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n'); } catch { /* tyst */ }
+    };
+}
 const { search, recommended, subscriptionsFeed } = require('./innertube');
 const { play, stop } = require('./player');
 const account = require('./account');
@@ -64,7 +82,12 @@ ipcMain.handle('account', () => account.accountState());
 // Inloggningen: YouTubes egen kod-dörr. Renderaren frågar 'account' medan
 // fönstret är öppet, så ingen kanal behövs för att säga till när det är klart.
 ipcMain.handle('openLogin', () => {
-    account.openDoor({ onSignedIn: () => console.log('[OmarchyTube] dörren stängd, kontot i partitionen') });
+    account.openDoor({
+        // Provet: samma anrop rutnätet behöver. Svarar YouTube med videor betyder
+        // det att sessionen bär ett konto — oavsett vad kakburken heter inuti.
+        probe: async () => (await recommended()).length,
+        onSignedIn: (state) => console.log(`[OmarchyTube] dörren stängd, kontot i partitionen (${state.via})`),
+    });
     return { opened: true };
 });
 

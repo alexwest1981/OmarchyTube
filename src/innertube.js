@@ -53,13 +53,13 @@ const headers = (token) => {
     return bearer ? { ...base, Authorization: `Bearer ${bearer}` } : base;
 };
 
-async function post(endpoint, body, token) {
+async function post(endpoint, body, token, context) {
     const url = `https://www.youtube.com/youtubei/v1/${endpoint}?key=${API_KEY}&prettyPrint=false`;
     const response = await net.fetch(url, {
         method: 'POST',
         headers: headers(token),
         session: partition(),
-        body: JSON.stringify({ context: CONTEXT, ...body }),
+        body: JSON.stringify({ context: context || CONTEXT, ...body }),
     });
     if (!response.ok) throw new Error(`${endpoint} svarade ${response.status}`);
     return response.json();
@@ -100,10 +100,36 @@ async function subscriptionsFeed() {
     return [];
 }
 
-// Provning: fungerar en token vi hittat i TV-appens lagring? Returnerar antalet
-// videor flödet svarar — 0 betyder nej, och då loggas aldrig själva token.
-async function recommendedWith(token) {
-    return extractItems(await post('browse', { browseId: 'FEwhat_to_watch' }, token));
+// En nyckel i TV-appens lagring är ofta ett JSON-objekt, inte en färdig sträng
+// (mätt: "yt.leanback.default::cached-access-tokens" gav 0 videor som helhet).
+// Plocka ut varje lång sträng ur värdet och prova dem — rena, aldrig loggade.
+function candidatesFrom(value) {
+    const ut = [];
+    const gå = (n) => {
+        if (typeof n === 'string') { if (n.length >= 20 && n.length <= 4000) ut.push(n); return; }
+        if (Array.isArray(n)) return n.forEach(gå);
+        if (n && typeof n === 'object') return Object.values(n).forEach(gå);
+    };
+    try { gå(JSON.parse(value)); } catch { gå(value); }
+    return [...new Set(ut)];
 }
 
-module.exports = { search, recommended, recommendedWith, subscriptionsFeed, storeToken, storedToken, thumbUrl, API_KEY, CONTEXT };
+// Provning: fungerar en token vi hittat i TV-appens lagring? Token tillhör
+// TV-klienten, så båda kontexterna provas (WEB och TVHTML5) — 0 videor betyder
+// nej, och då loggas aldrig själva token.
+async function recommendedWith(token, clientName = 'WEB') {
+    const context = { client: { ...CONTEXT.client, ...(clientName === 'WEB' ? {} : { clientName, clientVersion: '7.20260101.10.00' }) } };
+    return extractItems(await post('browse', { browseId: 'FEwhat_to_watch' }, token, context));
+}
+
+async function recommendedWithAnyClient(token) {
+    for (const clientName of ['TVHTML5', 'WEB']) {
+        try {
+            const items = await recommendedWith(token, clientName);
+            if (items.length) return { items, clientName };
+        } catch { /* nästa klient */ }
+    }
+    return { items: [], clientName: null };
+}
+
+module.exports = { search, recommended, recommendedWith, recommendedWithAnyClient, candidatesFrom, subscriptionsFeed, storeToken, storedToken, thumbUrl, API_KEY, CONTEXT };

@@ -24,7 +24,7 @@ for (const level of ['log', 'error']) {
         try { fs.appendFileSync(LOG_FILE, args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n'); } catch { /* tyst */ }
     };
 }
-const { search, recommended, recommendedWith, subscriptionsFeed, storeToken } = require('./innertube');
+const { search, recommended, recommendedWithAnyClient, candidatesFrom, subscriptionsFeed, storeToken } = require('./innertube');
 const { play, stop } = require('./player');
 const account = require('./account');
 
@@ -99,12 +99,15 @@ ipcMain.handle('openLogin', () => {
         // aldrig nyckeln (den är kontots).
         onStorage: async (par) => {
             for (const [namn, varde] of par) {
-                if (typeof varde !== 'string' || varde.length < 20) continue;
-                const antal = await recommendedWith(varde).then((items) => items.length).catch(() => 0);
-                console.log(`[OmarchyTube] provar "${namn}": ${antal} videor`);
-                if (antal > 0) {
-                    storeToken(varde);
-                    console.log(`[OmarchyTube] sessionen hittad i "${namn}" och sparad — appen är inloggad`);
+                if (typeof varde !== 'string') continue;
+                for (const kandidat of candidatesFrom(varde).slice(0, 4)) {
+                    const { items, clientName } = await recommendedWithAnyClient(kandidat);
+                    console.log(`[OmarchyTube] provar "${namn}" (${kandidat.length} tecken): ${items.length} videor${clientName ? ` via ${clientName}` : ''}`);
+                    if (items.length) {
+                        storeToken(kandidat);
+                        console.log(`[OmarchyTube] sessionen hittad i "${namn}" och sparad — appen är inloggad`);
+                        return;
+                    }
                 }
             }
         },

@@ -234,9 +234,8 @@ footer {
     margin: 18px 0 6px;
 }
 #login-qr {
-    width: 240px;
-    height: 240px;
-    image-rendering: pixelated;
+    max-width: 520px;
+    height: auto;
     background: #fff;
     border-radius: 10px;
     padding: 10px;

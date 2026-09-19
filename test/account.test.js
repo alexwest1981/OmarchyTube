@@ -30,7 +30,8 @@ class AttrappFonster {
             on() {},
             getTitle: () => '',
             getURL: () => '',
-            executeJavaScript: async () => JSON.stringify({ lagring: ['yt.leanback.…'], sessions: [], kakor: ['PREF'], adress: 'https://www.youtube.com/tv#/' }),
+            executeJavaScript: async () => JSON.stringify({ lagring: ['yt.leanback.…'], sessions: [], kakor: ['PREF'], adress: 'https://www.youtube.com/tv#/', knappar: [], langd: 330, titel: 'YouTube on TV' }),
+            capturePage: async () => ({ isEmpty: () => false, toPNG: () => Buffer.alloc(1024), toDataURL: () => 'data:image/png;base64,prov', getSize: () => ({ width: 1000, height: 671 }) }),
         };
         skapade.push(this);
     }

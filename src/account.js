@@ -39,13 +39,28 @@ const codeFrom = (text) => {
 // och bara de två uppgifterna. ponytail: största bilden, inte en CSS-selektor;
 // byt till en selektor om TV-appen någonsin visar något större.
 const LES_KODEN = `(function () {
-    var txt = document.body ? document.body.innerText : '';
-    var m = txt.match(/[A-Z0-9]{3,4}(?:-[A-Z0-9]{3,4}){1,2}/);
+    var kropp = document.body || {};
+    var t = kropp.textContent || kropp.innerText || '';
+    var m = t.match(/[A-Z0-9]{3,4}(?:-[A-Z0-9]{3,4}){1,2}/);
+    var knappar = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'))
+        .map(function (el) { return (el.textContent || '').trim().slice(0, 24); })
+        .filter(Boolean).slice(0, 12);
     var bilder = Array.prototype.slice.call(document.querySelectorAll('img, canvas'))
-        .filter(function (el) { return el.tagName === 'IMG' ? el.naturalWidth >= 100 : el.width >= 100; });
+        .filter(function (el) { return el.tagName === 'IMG' ? (el.naturalWidth >= 60 || /^data:/.test(el.src || '')) : el.width >= 60; });
     var qr = null;
     if (bilder[0]) { try { qr = bilder[0].tagName === 'CANVAS' ? bilder[0].toDataURL('image/png') : bilder[0].src; } catch (e) { qr = null; } }
-    return JSON.stringify({ code: m ? m[0] : null, qr: qr });
+    return JSON.stringify({ code: m ? m[0] : null, qr: qr, knappar: knappar, langd: t.length, titel: document.title, adress: location.href });
+})()`;
+
+// TV-appen visar sin inloggning bakom en "Sign in"-knapp. Att trycka på sidans
+// EGEN knapp är att använda flödet, inte att ändra sidan — och det är precis vad
+// en människa hade gjort i det synliga fönstret.
+const TRYCK_INLOGGNING = `(function () {
+    var kandidater = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'));
+    var knapp = kandidater.filter(function (el) { return /(^|\s)(sign in|logga in)(\s|$)/i.test((el.textContent || '').trim()); })[0];
+    if (!knapp) return 'ingen inloggningsknapp';
+    knapp.click();
+    return 'tryckte "' + (knapp.textContent || '').trim().slice(0, 24) + '"';
 })()`;
 
 const markersIn = (cookies) => [...new Set((cookies || []).map((c) => c.name).filter((name) => MARKERS.includes(name)))].sort();
@@ -174,14 +189,39 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
 }
 
 // Panelens innehåll: koden och QR-bilden, lästa ur den osynliga sidan.
+let klickad = false;
+let senasteBild = 0;
+
+// Koden ligger i en cross-origin-ram (mätt: hela sidans text är 330 tecken, ingen
+// kod i den). Därför fotograferas den dolda sidan i stället — mätt 2026-09-19:
+// capturePage på ett fönster med show:false ger en riktig bild (1000x671, 26 kB).
+// Bilden ritas i appens panel, så QR:en kan skannas direkt från skärmen.
 async function loginInfo() {
     if (!current) return { open: false };
     const raw = await current.webContents.executeJavaScript(LES_KODEN).catch(() => null);
-    if (!raw) return { open: true };
     let läst = {};
-    try { läst = JSON.parse(raw); } catch { läst = {}; }
-    if (läst.qr) qrBild = läst.qr;   // QR:en ritas en gång och behålls
-    return { open: true, code: codeFrom(läst.code) || läst.code || null, qr: qrBild };
+    if (raw) { try { läst = JSON.parse(raw); } catch { läst = {}; } }
+    const code = codeFrom(läst.code) || läst.code || null;
+    if (!code && !klickad && läst.knappar && läst.knappar.length) {
+        klickad = true;
+        const gjort = await current.webContents.executeJavaScript(TRYCK_INLOGGNING).catch((err) => `fel: ${err.message}`);
+        console.log(`[OmarchyTube] sidan ville ha ett tryck: ${gjort} (knappar: ${läst.knappar.join(' | ')})`);
+    }
+    if (!code && Date.now() - senasteBild > 3000) {
+        senasteBild = Date.now();
+        try {
+            const bild = await current.webContents.capturePage();
+            if (!bild.isEmpty()) {
+                qrBild = bild.toDataURL();
+                const { width, height } = bild.getSize();
+                console.log(`[OmarchyTube] inloggningsrutan fotograferad: ${width}x${height}, ${Math.round(bild.toPNG().length / 1024)} kB`);
+            }
+        } catch (err) {
+            console.error(`[OmarchyTube] kunde inte fotografera inloggningen: ${err.message}`);
+        }
+    }
+    if (code) console.log(`[OmarchyTube] koden läst ur sidan: ${code}`);
+    return { open: true, code, qr: qrBild };
 }
 
 module.exports = { PARTITION, TV_UA, DOOR_URL, MARKERS, markersIn, codeFrom, accountState, openDoor, loginInfo, partition };

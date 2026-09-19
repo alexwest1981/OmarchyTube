@@ -42,3 +42,12 @@ test('utan nyckel skickas ingen Authorization', async () => {
     await innertube.search('test');
     assert.strictEqual(requests[0].options.headers.Authorization, undefined);
 });
+
+test('kandidaterna plockas ur ett JSON-värde, inte ur hela blobben', () => {
+    const blob = JSON.stringify({ tokens: [{ token: 'ya29.hemlig-1234567890' }], annat: 'kort' });
+    const funna = innertube.candidatesFrom(blob);
+    assert.ok(funna.includes('ya29.hemlig-1234567890'), `hittade ${JSON.stringify(funna)}`);
+    assert.ok(!funna.includes(blob), 'hela blobben skall inte provas');
+    assert.deepStrictEqual(innertube.candidatesFrom('kort'), [], 'för korta strängar hoppas över');
+    assert.deepStrictEqual(innertube.candidatesFrom('en-lang- strang-1234567890'), ['en-lang- strang-1234567890']);
+});

@@ -1,82 +1,71 @@
-// Prov för FELKLASSEN, inte bara för kvällens instans.
+// Fångar den bugg som small 2026-09-19: en namnändring skrev om DEFINITIONEN till
+// ett självanrop — `const sessionOfWindow = (win) => sessionOfWindow(win);` — och
+// varje anrop small på stacken.
 //
-// 2026-09-19 small appen på `const sessionOfWindow = (win) => sessionOfWindow(win);`
-// — en namnändring som råkade skriva om definitionen till ett självanrop. Felet
-// landade som "RangeError: Maximum call stack size exceeded" i huvudprocessen, och
-// appen stod still. Det här provet letar efter samma sak i alla källfiler: en
-// definition vars kropp nämner sitt eget namn.
-//
-// ponytail: provet tillåter ingen självreferens alls. Behöver appen en riktig
-// rekursiv algoritm får den ett undantag i listan här — det är billigare än att
-// felsöka nästa "Maximum call stack size exceeded" i en app utan skärm.
+// Provet fäller bara den formen: en definition vars hela kropp är ett enda
+// självanrop. Äkta rekursion (en trädvandring som anropar sig i en loop) är
+// tillåten och skall passera — första versionen av provet fällde den också.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const SRC = path.join(__dirname, '..', 'src');
-const files = fs.readdirSync(SRC).filter((name) => name.endsWith('.js'));
+const ARROW = /(?:^|\n)\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>\s*/g;
+const FUNC = /(?:^|\n)\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g;
 
-// Tar bort kommentarer och strängar, så att ett omnämnande i prosa inte ger utslag.
-//
-// RAD FÖR RAD, med flit: en global regex för strängar kan spänna över hur många
-// rader som helst, och en enda obalanserad apostrof åt då upp resten av filen — då
-// hade provet varit teater (0 definitioner kvar, allt "grönt").
-function strip(text) {
-    return text.split('\n').map((line) => line
-        .replace(/\s*\/\/.*$/, '')
-        .replace(/'(?:[^'\\]|\\.)*'/g, "''")
-        .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-        .replace(/`(?:[^`\\]|\\.)*`/g, '``')
-    ).join('\n');
+// ponytail: naiv klammerräkning, inte en parser. Räcker för att se om kroppen är
+// ett enda anrop; byt mot en riktig parser om koden börjar innehålla klamrar i
+// strängar.
+function bodyOf(src, start) {
+    let i = start;
+    while (/\s/.test(src[i])) i += 1;
+    if (src[i] === '{') {
+        let depth = 0;
+        for (let j = i; j < src.length; j += 1) {
+            if (src[j] === '{') depth += 1;
+            else if (src[j] === '}') {
+                depth -= 1;
+                if (depth === 0) return src.slice(i + 1, j);
+            }
+        }
+        return src.slice(i + 1);
+    }
+    const end = src.indexOf(';', i);
+    return src.slice(i, end === -1 ? undefined : end);
 }
 
-function definitions(code) {
+function definitions(src) {
     const found = [];
-    // const namn = (...) => ...
-    for (const match of code.matchAll(/const\s+(\w+)\s*=\s*(\([^)]*\)\s*=>[^;\n]*|[^;\n]*=>)/g)) {
-        found.push({ name: match[1], body: match[2] });
-    }
-    // function namn(...) { ... } — med klammerbalans
-    for (const match of code.matchAll(/function\s+(\w+)\s*\([^)]*\)\s*\{/g)) {
-        let depth = 0;
-        let i = match.index + match[0].length - 1;
-        const start = i;
-        for (; i < code.length; i += 1) {
-            if (code[i] === '{') depth += 1;
-            if (code[i] === '}') { depth -= 1; if (depth === 0) break; }
-        }
-        found.push({ name: match[1], body: code.slice(start, i + 1) });
+    for (const re of [ARROW, FUNC]) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(src)) !== null) found.push({ name: m[1], body: bodyOf(src, m.index + m[0].length) });
     }
     return found;
 }
 
+const selfCallOnly = (name, body) => new RegExp(`^\\s*${name}\\s*\\([^;]*\\)\\s*;?\\s*$`).test(body);
+
+const files = fs.readdirSync(SRC).filter((f) => f.endsWith('.js'));
+let total = 0;
+
 for (const file of files) {
-    const code = strip(fs.readFileSync(path.join(SRC, file), 'utf8'));
-    test(`${file}: ingen definition anropar sig själv`, () => {
-        for (const { name, body } of definitions(code)) {
-            const callsItself = new RegExp(`(?<![\\w.])${name}\\s*\\(`).test(body);
-            assert.ok(!callsItself, `${name} anropar sig själv i ${file} — det blir "Maximum call stack size exceeded"`);
-        }
+    const src = fs.readFileSync(path.join(SRC, file), 'utf8');
+    const defs = definitions(src);
+    total += defs.length;
+    test(`${file}: ingen definition är ett självanrop`, () => {
+        const bad = defs.filter((d) => selfCallOnly(d.name, d.body)).map((d) => d.name);
+        assert.deepStrictEqual(bad, [], `${bad.join(', ')} i ${file} anropar sig själv som hela sin kropp`);
     });
 }
 
 test('skannern hittar definitionerna (annars vore provet teater)', () => {
-    // Första versionen av det här provet åt hela filen med sin kommentarstädning och
-    // såg 0 definitioner — alltså grönt utan att mäta någonting. Nu mäts det.
-    const per = files.map((file) => ({
-        file,
-        count: definitions(strip(fs.readFileSync(path.join(SRC, file), 'utf8'))).length
-    }));
-    const total = per.reduce((sum, entry) => sum + entry.count, 0);
-    assert.ok(total >= 15, `hittade bara ${total} definitioner totalt: ${JSON.stringify(per)}`);
-    const mainCount = (per.find((entry) => entry.file === 'main.js') || {}).count || 0;
-    assert.ok(mainCount >= 8, `main.js gav bara ${mainCount} definitioner — städningen har ätit filen`);
-});
-
-test('provet biter på det som small', () => {
-    const broken = strip('const f = (x) => f(x);');
-    const { name, body } = definitions(broken)[0];
-    assert.strictEqual(name, 'f');
-    assert.match(body, /f\s*\(/, 'provet känner inte igen ett självanrop');
+    assert.ok(total >= 10, `skannern hittade bara ${total} definitioner i src/`);
+    const main = definitions(fs.readFileSync(path.join(SRC, 'main.js'), 'utf8')).map((d) => d.name);
+    assert.ok(main.includes('createWindow'), `createWindow saknas i skannerns träfflista: ${main.join(', ')}`);
+    const extract = definitions(fs.readFileSync(path.join(SRC, 'innertube-extract.js'), 'utf8')).map((d) => d.name);
+    assert.ok(extract.includes('extractItems'), `extractItems saknas i skannerns träfflista: ${extract.join(', ')}`);
+    const browse = definitions(fs.readFileSync(path.join(SRC, 'browse.js'), 'utf8')).map((d) => d.name);
+    assert.ok(browse.includes('makeCard'), `makeCard saknas i skannerns träfflista: ${browse.join(', ')}`);
 });

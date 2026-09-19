@@ -419,6 +419,11 @@ async function forgetVisitor(targetSession) {
 // popup eller navigering), F2, eller en utloggad profil som startar i TV-läget.
 async function openSignInDoor(win, targetSession) {
     if (!win || win.isDestroyed()) return;
+
+    // Redan i dörren: inget att öppna, och framför allt inget att städa. Städningen
+    // tittar på en ögonblicksbild av kakorna, så en städning mitt i TV-appens
+    // inloggning kastar bort sessionen som just skapades.
+    if (currentMode === 'tv' && win.webContents.getURL().startsWith(TV_PAGE)) return;
     const wasVisitor = await forgetVisitor(targetSession);
     if (win.isDestroyed()) return;
 
@@ -441,7 +446,7 @@ function routeToSignInDoor(win) {
     openSignInDoor(win, sessionOfWindow(win));
 }
 
-const sessionOfWindow = (win) => sessionOfWindow(win);
+const sessionOfWindow = (win) => session.fromPartition(partitionOfWindow(win));
 
 function partitionOfWindow(win) {
     const id = windowProfiles.get(win.webContents.id);

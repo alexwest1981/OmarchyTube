@@ -24,22 +24,20 @@ const SESSION_COOKIES = /^(SID|SAPISID|__Secure-1PSID|__Secure-3PSID)$/;
 
 const isSignedIn = (cookies = []) => cookies.some((cookie) => SESSION_COOKIES.test(cookie.name));
 
-// DEN BLOCKERADE vägen — och bara den. Google svarar "This browser or app may not be
-// secure" på lösenordsformuläret i en inbäddad webbläsare, och det är den sidan vi
-// fångar: ServiceLogin, signin/v2, kontoväljaren (som leder vidare dit), och
-// YouTubes egen /signin.
+// Googles inloggningsväg. Google svarar en inbäddad webbläsare "This browser or app
+// may not be secure" — mätt, tre gånger, på tre olika former av samma väg
+// (ServiceLogin, v3/signin och OAuth).
 //
-// Allt annat måste få passera. Mätt 2026-09-19: TV-appens EGEN inloggning går via
-// Google, och en fångst som tog allt under accounts.google.com slet sidan, laddade
-// om dörren och släppte användaren tillbaka i TV-flödet — mitt i inloggningen, utan
-// att ha fått fylla i något.
-const BLOCKED_SIGN_IN = [
-    /accounts\.google\.com\/(ServiceLogin|signin\/v2|v3\/signin|AccountChooser)/,
-    /accounts\.google\.com\/embedded/,
-    /youtube\.com\/signin(\?|$)/
-];
+// Fångsten är därför vid igen: ALLT under accounts.google.com och YouTubes egen
+// /signin. Att smalna av den efter vägens utseende var ett misstag — OAuth-varianten
+// gick rakt igenom och visade Googles felsida i appens fönster (mätt 2026-09-19).
+//
+// Det som hindrar den från att slita sönder TV-appens EGEN inloggning är inte
+// mönstret utan grinden i main.js: fångsten gäller bara i skrivbordsläget. I dörren
+// äger TV-appen sin inloggning.
+const SIGN_IN_WAY = /accounts\.google\.com|youtube\.com\/signin(\?|$)/;
 
-const isBlockedSignIn = (url = '') => BLOCKED_SIGN_IN.some((pattern) => pattern.test(url));
+const isBlockedSignIn = (url = '') => SIGN_IN_WAY.test(url);
 
 const pageForMode = (mode) => (mode === 'tv' ? TV_PAGE : DESKTOP_PAGE);
 

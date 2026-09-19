@@ -75,6 +75,14 @@ test('dörren är ETT ställe med tre vägar in', () => {
     assert.match(code, /if \(plan\.signIn\) \{\s*openSignInDoor\(/, 'starten tar inte dörren');
 });
 
+test('dörren är idempotent — den städar inte om den redan är öppen', () => {
+    // Städningen tittar på en ögonblicksbild: körde den mitt i TV-appens inloggning
+    // kastades sessionen bort.
+    const door = code.match(/async function openSignInDoor[\s\S]*?\n\}/);
+    assert.match(door[0], /if \(currentMode === 'tv' && win\.webContents\.getURL\(\)\.startsWith\(TV_PAGE\)\) return;/,
+        'dörren kan öppnas om och städa mitt i en pågående inloggning');
+});
+
 test('dörren städar besökskakorna innan TV-sidan laddas', () => {
     // Mätt 2026-09-19: med besökskakor i partitionen visar TV-appen sitt FLÖDE
     // ("Recommended"/"New to you") i stället för inloggningen — ingen QR-kod finns

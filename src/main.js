@@ -27,7 +27,7 @@ const path = require('path');
 
 const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
 const { getUserAgentForMode } = require('./user-agent');
-const { TV_PAGE, isGoogleSignIn, isSignedIn, pageForMode, planForSession, signInPlan } = require('./sign-in');
+const { TV_PAGE, isBlockedSignIn, isSignedIn, pageForMode, planForSession, signInPlan } = require('./sign-in');
 const { DEFAULT: DEFAULT_ZOOM, clampZoom, nextZoom } = require('./zoom');
 
 // Spelaren startar när sidan byts (användaren tryckte Enter i TV-appen och
@@ -230,10 +230,11 @@ function createWindow(profile) {
 
     win.webContents.setWindowOpenHandler(({ url }) => {
         const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-        if (isGoogleSignIn(url)) {
+        if (isBlockedSignIn(url)) {
             // Popup-vägen till Googles lösenordsformulär: stäng den och öppna dörren
             // Google faktiskt öppnar i stället för att visa det blockerade formuläret.
-            routeToSignInDoor(win);
+            // Bara från skrivbordsläget — i dörren äger TV-appen sin egen inloggning.
+            if (currentMode === 'desktop') routeToSignInDoor(win);
             return { action: 'deny' };
         }
         if (!isYouTube) {
@@ -302,9 +303,11 @@ function createWindow(profile) {
         }
     });
 
-    // Samma dörr om inloggningen navigeras i huvudramen i stället för i en popup.
+    // Samma dörr om inloggningen navigeras i huvudramen i stället för i en popup —
+    // men bara från skrivbordsläget. Mätt 2026-09-19: fångade vi även TV-appens egna
+    // Google-steg rev vi inloggningen och släppte användaren tillbaka i TV-flödet.
     win.webContents.on('did-navigate', (_event, url) => {
-        if (isGoogleSignIn(url)) routeToSignInDoor(win);
+        if (currentMode === 'desktop' && isBlockedSignIn(url)) routeToSignInDoor(win);
     });
 
     win.on('app-command', (e, cmd) => {
@@ -380,7 +383,17 @@ async function forgetVisitor(targetSession) {
 
     await Promise.all(cookies.map((cookie) =>
         targetSession.cookies.remove('https://www.youtube.com/', cookie.name).catch(() => {})));
-    console.log(`[OmarchyTube] Städade ${cookies.length} besökskakor, så TV-appen visar inloggningen i stället för flödet.`);
+
+    // Kakor är inte allt: TV-appen minns en återkommande besökare i lokal lagring
+    // också, och då visar den flödet i stället för inloggningen (mätt 2026-09-19 —
+    // städade kakor räckte inte). Electronns egen API, ingen sidscriptning.
+    for (const origin of ['https://www.youtube.com', 'https://www.youtube.com/tv']) {
+        await targetSession.clearStorageData({
+            origin,
+            storages: ['localstorage', 'indexdb', 'cookies']
+        }).catch((err) => console.warn('[OmarchyTube] Kunde inte städa', origin, err.message));
+    }
+    console.log(`[OmarchyTube] Städade ${cookies.length} besökskakor och den lokala lagringen, så TV-appen visar inloggningen i stället för flödet.`);
     return true;
 }
 

@@ -52,11 +52,23 @@ one that gets denser.
 
 ## Why sign-in goes through the TV screen
 
+The app only ever intercepts Google's **blocked password path**
+(ServiceLogin / signin-v2 / the account chooser / YouTube's own `/signin`) — and
+only while you are in the desktop layout. Everything else, including the TV app's
+own sign-in, is left alone. That guard is measured: intercepting every Google URL
+tore YouTube's TV sign-in apart mid-flight and dropped the user back in the TV feed
+without ever getting to enter anything.
+
+If you are in the TV layout, sign-in is YouTube's own screen: the avatar in the top
+left → the account screen → *Sign in* → the QR code (or press <kbd>↵</kbd> on
+*Get started* if that is what came up).
+
 One thing the TV app does on its own is skip the sign-in screen: with visitor
-cookies already in the profile it opens its normal feed instead
+data already in the profile it opens its normal feed instead
 (*Recommended*, *New to you*) and there is **no QR code** anywhere on it — measured,
 that is where clicking *Sign in* led. So the app clears the profile's visitor
-cookies right before it opens the door. Only when there is no account: an existing
+cookies **and its local storage** right before it opens the door — clearing cookies
+alone was not enough, the TV app still recognised a returning visitor. Only when there is no account: an existing
 session is never touched.
 
 The obvious route — YouTube's normal password form — is closed to every
@@ -110,7 +122,7 @@ the network layer.
 npm test
 ```
 
-40 tests: the sign-in door and its clearing, the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
+43 tests: the sign-in door, its clearing, and the interception guard, the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
 may never share one), the user agent per mode, the sign-in decision, the IPC
 channels, and an architecture test that fails if an injector, a page script or a
 second zoom mechanism ever comes back.

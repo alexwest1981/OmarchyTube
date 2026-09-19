@@ -24,10 +24,22 @@ const SESSION_COOKIES = /^(SID|SAPISID|__Secure-1PSID|__Secure-3PSID)$/;
 
 const isSignedIn = (cookies = []) => cookies.some((cookie) => SESSION_COOKIES.test(cookie.name));
 
-// Googles inloggningssida — den Google vägrar visa i en inbäddad webbläsare. Fångar
-// både popup-fönstret (window.open) och en vanlig navigering.
-const isGoogleSignIn = (url = '') =>
-    url.includes('accounts.google.com') || url.includes('youtube.com/signin');
+// DEN BLOCKERADE vägen — och bara den. Google svarar "This browser or app may not be
+// secure" på lösenordsformuläret i en inbäddad webbläsare, och det är den sidan vi
+// fångar: ServiceLogin, signin/v2, kontoväljaren (som leder vidare dit), och
+// YouTubes egen /signin.
+//
+// Allt annat måste få passera. Mätt 2026-09-19: TV-appens EGEN inloggning går via
+// Google, och en fångst som tog allt under accounts.google.com slet sidan, laddade
+// om dörren och släppte användaren tillbaka i TV-flödet — mitt i inloggningen, utan
+// att ha fått fylla i något.
+const BLOCKED_SIGN_IN = [
+    /accounts\.google\.com\/(ServiceLogin|signin\/v2|v3\/signin|AccountChooser)/,
+    /accounts\.google\.com\/embedded/,
+    /youtube\.com\/signin(\?|$)/
+];
+
+const isBlockedSignIn = (url = '') => BLOCKED_SIGN_IN.some((pattern) => pattern.test(url));
 
 const pageForMode = (mode) => (mode === 'tv' ? TV_PAGE : DESKTOP_PAGE);
 
@@ -43,4 +55,4 @@ function planForSession(cookies, currentMode) {
 // Dörren: samma svar varje gång Google-inloggningen försöks.
 const signInPlan = () => ({ mode: 'tv', url: TV_PAGE, signedIn: false, signIn: true });
 
-module.exports = { DESKTOP_PAGE, TV_PAGE, isGoogleSignIn, isSignedIn, pageForMode, planForSession, signInPlan };
+module.exports = { DESKTOP_PAGE, TV_PAGE, isBlockedSignIn, isSignedIn, pageForMode, planForSession, signInPlan };

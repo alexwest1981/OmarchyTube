@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { DESKTOP_PAGE, TV_PAGE, isGoogleSignIn, isSignedIn, planForSession, signInPlan } = require('../src/sign-in');
+const { DESKTOP_PAGE, TV_PAGE, isBlockedSignIn, isSignedIn, planForSession, signInPlan } = require('../src/sign-in');
 
 const session = [{ name: 'SID', value: 'x' }];
 
@@ -24,11 +24,21 @@ test('bara Googles egna sessionskakor räknas', () => {
     assert.strictEqual(isSignedIn(), false);
 });
 
-test('Googles inloggningsväg känns igen, i både popup och navigering', () => {
-    assert.strictEqual(isGoogleSignIn('https://accounts.google.com/ServiceLogin?continue=…'), true);
-    assert.strictEqual(isGoogleSignIn('https://www.youtube.com/signin?action_handle_signin=true'), true);
-    assert.strictEqual(isGoogleSignIn('https://www.youtube.com/watch?v=abc'), false);
-    assert.strictEqual(isGoogleSignIn(''), false);
+test('bara den BLOCKERADE lösenordsvägen fångas', () => {
+    assert.strictEqual(isBlockedSignIn('https://accounts.google.com/ServiceLogin?service=youtube'), true);
+    assert.strictEqual(isBlockedSignIn('https://accounts.google.com/signin/v2/identifier?flowName=…'), true);
+    assert.strictEqual(isBlockedSignIn('https://accounts.google.com/AccountChooser?continue=…'), true);
+    assert.strictEqual(isBlockedSignIn('https://www.youtube.com/signin?action_handle_signin=true'), true);
+});
+
+test('allt annat får passera — särskilt Google-vägar som inte är lösenordsformuläret', () => {
+    // Fångade vi dessa slets TV-appens egen inloggning mitt i (mätt 2026-09-19).
+    assert.strictEqual(isBlockedSignIn('https://accounts.google.com/o/oauth2/auth?client_id=…'), false);
+    assert.strictEqual(isBlockedSignIn('https://accounts.google.com/device'), false);
+    assert.strictEqual(isBlockedSignIn('https://www.youtube.com/tv'), false);
+    assert.strictEqual(isBlockedSignIn('https://www.youtube.com/activate?user_code=GDM-STY-SDG'), false);
+    assert.strictEqual(isBlockedSignIn('https://www.youtube.com/watch?v=abc'), false);
+    assert.strictEqual(isBlockedSignIn(''), false);
 });
 
 test('dörren är alltid TV-läget med vakten på', () => {

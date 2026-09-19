@@ -106,8 +106,28 @@ test('Googles blockerade inloggningsväg leder till dörren — genom en funktio
     // webbläsare. Både popup-vägen och navigeringsvägen skall gå till QR-dörren.
     const calls = code.match(/routeToSignInDoor\(win\)/g) || [];
     assert.strictEqual(calls.length, 3, `routeToSignInDoor anropas ${calls.length} gånger (förväntat: definitionen + popup + navigering)`);
-    assert.match(code, /setWindowOpenHandler[\s\S]{0,400}isGoogleSignIn\(url\)/, 'popup-vägen fångas inte');
-    assert.match(code, /did-navigate[\s\S]{0,200}isGoogleSignIn\(url\)/, 'navigeringsvägen fångas inte');
+    assert.match(code, /setWindowOpenHandler[\s\S]{0,500}isBlockedSignIn\(url\)/, 'popup-vägen fångas inte');
+    assert.match(code, /did-navigate[\s\S]{0,200}isBlockedSignIn\(url\)/, 'navigeringsvägen fångas inte');
+});
+
+test('fångsten gäller bara skrivbordsläget — dörren äger sin egen inloggning', () => {
+    // Mätt 2026-09-19: TV-appens egen inloggning går via Google. Fångade vi den
+    // revs sidan och användaren släpptes tillbaka i TV-flödet utan att ha fått
+    // fylla i något — tre skärmbilder visade loopen.
+    assert.match(code, /did-navigate[\s\S]{0,200}currentMode === 'desktop' && isBlockedSignIn\(url\)/,
+        'navigeringsfångsten gäller även i TV-läget — då kapas TV-appens inloggning');
+    assert.match(code, /if \(isBlockedSignIn\(url\)\) \{[\s\S]{0,300}if \(currentMode === 'desktop'\) routeToSignInDoor\(win\);/,
+        'popup-fångsten gäller även i TV-läget');
+});
+
+test('städningen tar lokal lagring också, inte bara kakor', () => {
+    // Mätt: städade kakor räckte inte — TV-appen kände ändå igen en återkommande
+    // besökare och visade flödet i stället för inloggningen.
+    const guard = code.match(/async function forgetVisitor[\s\S]*?\n\}/);
+    assert.match(guard[0], /clearStorageData\(/, 'den lokala lagringen städas inte');
+    assert.match(guard[0], /storages: \['localstorage'/, 'localstorage saknas i städningen');
+    // Ursprungslistan måste vara verklig: med [] städas ingenting medan koden ser rätt ut.
+    assert.match(guard[0], /for \(const origin of \['https:\/\/www\.youtube\.com'/, 'städningen går inte över något ursprung');
 });
 
 test("'closed' läser aldrig webContents, som redan är förstörd", () => {

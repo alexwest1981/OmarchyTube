@@ -52,11 +52,22 @@ blir tätare.
 
 ## Varför inloggningen går via TV-skärmen
 
+Appen fångar bara Googles **blockerade lösenordsväg** (ServiceLogin / signin-v2 /
+kontoväljaren / YouTubes egen `/signin`) — och bara medan du står i
+skrivbordslayouten. Allt annat, inklusive TV-appens egen inloggning, lämnas i fred.
+Den grinden är mätt: att fånga varje Google-adress slet TV-inloggningen mitt i och
+släppte användaren tillbaka i TV-flödet utan att någonsin få skriva något.
+
+Står du i TV-layouten är inloggningen YouTubes egen skärm: avataren uppe till
+vänster → kontoskärmen → *Sign in* → QR-koden (eller tryck <kbd>↵</kbd> på
+*Get started* om den kom upp).
+
 En sak TV-appen gör på egen hand är att hoppa förbi inloggningsrutan: har
-profilen redan besökskakor öppnar den sitt vanliga flöde (*Recommended*, *New to
+profilen redan besökardata öppnar den sitt vanliga flöde (*Recommended*, *New to
 you*) i stället, och där finns **ingen QR-kod** någonstans — mätt, och det var dit
-ett klick på *Sign in* ledde. Därför städar appen bort profilens besökskakor precis
-innan den öppnar dörren. Bara när det inte finns något konto: en befintlig session
+ett klick på *Sign in* ledde. Därför städar appen bort profilens besökskakor **och dess
+lokala lagring** precis innan den öppnar dörren — att bara ta kakorna räckte inte,
+TV-appen kände ändå igen en återkommande besökare. Bara när det inte finns något konto: en befintlig session
 rörs aldrig.
 
 Den uppenbara vägen — YouTubes vanliga lösenordsformulär — är stängd för varje
@@ -108,7 +119,7 @@ läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 npm test
 ```
 
-40 prov: dörren och dess städning, zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
+43 prov: dörren, städningen, fångstgrinden, zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
 aldrig dela en), webbläsaridentiteten per läge, inloggningsbeslutet, IPC-kanalerna,
 och ett arkitekturprov som fäller om en injektor, ett zoom-anrop eller ett
 sidskript kommer tillbaka.

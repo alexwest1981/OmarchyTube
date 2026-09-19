@@ -225,3 +225,22 @@ footer {
 }
 .card.channel .thumb { display: flex; align-items: center; justify-content: center; }
 .card.channel .thumb img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
+
+#login-code {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin: 18px 0 6px;
+}
+#login-qr {
+    width: 240px;
+    height: 240px;
+    image-rendering: pixelated;
+    background: #fff;
+    border-radius: 10px;
+    padding: 10px;
+    margin: 6px 0 12px;
+    display: block;
+}
+#login .hint { color: var(--muted); font-size: 14px; }

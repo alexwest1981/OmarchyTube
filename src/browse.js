@@ -181,7 +181,10 @@ document.addEventListener('keydown', (event) => {
 const tabs = document.getElementById('tabs');
 const loginPanel = document.getElementById('login');
 const loginStatusText = document.getElementById('login-status');
-let accountTimer = null;
+const loginCode = document.getElementById('login-code');
+const loginQr = document.getElementById('login-qr');
+const logoutButton = document.getElementById('logout');
+let loginTimer = null;
 
 function showNotice(text) {
     notice.hidden = !text;
@@ -211,32 +214,40 @@ async function feed(name) {
         render();
         status.textContent = '';
         showNotice(`Kunde inte hämta ${label.toLowerCase()}: ${err.message}`);
-        openLogin();
     }
 }
 
 function openLogin() {
     loginPanel.hidden = false;
-    if (!loginStatusText.textContent) loginStatusText.textContent = 'Inget konto än. Tryck på knappen — inloggningen sköter resten.';
+    if (!loginStatusText.textContent) loginStatusText.textContent = 'Hämtar en kod …';
     document.getElementById('open-login').focus();
 }
 
-// Dörren är ett eget fönster; här väntar vi bara på att kontot syns i sessionen.
-function watchForAccount() {
-    clearInterval(accountTimer);
-    let ticks = 0;
-    accountTimer = setInterval(async () => {
-        ticks += 1;
+// Inloggningen sker i ett osynligt fönster; här ritas bara koden och QR:en, och
+// vi väntar på att kontot syns. Ingen YouTube-sida visas någonsin.
+function watchForLogin() {
+    clearInterval(loginTimer);
+    loginTimer = setInterval(async () => {
+        const info = await window.omarchyBridge.loginInfo().catch(() => ({ open: false }));
+        if (info.open && info.code && loginCode.textContent !== info.code) {
+            loginCode.hidden = false;
+            loginCode.textContent = info.code;
+            loginStatusText.textContent = 'Skriv koden på mobilen, eller skanna:';
+        } else if (info.open && !info.code) {
+            loginStatusText.textContent = 'Hämtar en kod …';
+        }
+        if (info.qr && loginQr.src !== info.qr) {
+            loginQr.src = info.qr;
+            loginQr.hidden = false;
+        }
         const account = await window.omarchyBridge.account().catch(() => ({ signedIn: false }));
         if (account.signedIn) {
-            clearInterval(accountTimer);
+            clearInterval(loginTimer);
             loginPanel.hidden = true;
             showNotice(`Inloggad (${account.markers.join(', ')}).`);
             feed('recommended');
-        } else if (ticks % 10 === 0) {
-            loginStatusText.textContent = 'Väntar på att du bekräftar koden i telefon…';
         }
-    }, 2000);
+    }, 1500);
 }
 
 async function start() {
@@ -244,17 +255,21 @@ async function start() {
     if (account.signedIn) {
         setTab('recommended');
         feed('recommended');
-    } else {
-        setTab('search');
-        openLogin();
-        showNotice('Sök fungerar utan konto. För din feed och rekommendationerna: logga in — ett fönster med en kod, inget att fylla i.');
+        return;
     }
+    setTab('search');
+    openLogin();
+    showNotice('Sök fungerar utan konto. För din feed och rekommendationerna: skriv koden från telefonen — allt sker i det här fönstret.');
+    await window.omarchyBridge.openLogin();
+    watchForLogin();
 }
 
 document.getElementById('open-login').addEventListener('click', async () => {
-    loginStatusText.textContent = 'Fönstret är öppet. Skanna koden med telefonen.';
+    loginCode.hidden = true;
+    loginQr.hidden = true;
+    loginStatusText.textContent = 'Hämtar en kod …';
     await window.omarchyBridge.openLogin();
-    watchForAccount();
+    watchForLogin();
 });
 
 tabs.addEventListener('click', (event) => {

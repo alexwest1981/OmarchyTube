@@ -22,9 +22,11 @@
 
     <section id="login" hidden>
         <h2>Logga in</h2>
-        <p>Ett fönster öppnas med YouTubes egen inloggning för TV-appar. Skanna koden med telefonens kamera (eller skriv in den på <b>yt.be/activate</b>) — ungefär som när du loggar in på en TV. Sedan är appen inloggad, och sessionen stannar här.</p>
-        <button type="button" id="open-login">Öppna inloggningen</button>
-        <p id="login-status"></p>
+        <p id="login-status">Startar inloggningen …</p>
+        <p id="login-code" hidden></p>
+        <img id="login-qr" alt="" hidden>
+        <p class="hint">Skanna QR-koden med telefonen — eller öppna <b>yt.be/activate</b> och skriv koden ovan. Inloggningen sker i den här appen; inget YouTube-fönster öppnas.</p>
+        <button type="button" id="open-login">Visa ny kod</button>
     </section>
 
     <main id="grid" tabindex="-1"></main>

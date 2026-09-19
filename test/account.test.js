@@ -98,6 +98,20 @@ test('dörren stänger sig på flödesprovet, inte bara på kaknamn', async () =
     kakor.lista = [{ name: 'LOGIN_INFO' }, { name: 'PREF' }];
 });
 
+test('koden plockas ur sidans text, i rätt form', () => {
+    assert.strictEqual(account.codeFrom('Skriv in GDM-STY-SDG på yt.be/activate'), 'GDM-STY-SDG');
+    assert.strictEqual(account.codeFrom('Koden är GDM-STY, två grupper'), 'GDM-STY');
+    assert.strictEqual(account.codeFrom('ingen kod här'), null);
+    assert.strictEqual(account.codeFrom(null), null);
+});
+
+test('dörrfönstret är osynligt — inget YouTube-fönster får öppnas', () => {
+    skapade.length = 0;
+    const door = account.openDoor({ intervalMs: 10000 });
+    assert.strictEqual(skapade[0].options.show, false, 'inloggningen skall ske i ett osynligt fönster (Alex: "det skall ske I appen")');
+    door.close();
+});
+
 test('dörren städar ingenting — den bara visar sin kod', () => {
     const door = fs.readFileSync(path.join(SRC, 'account.js'), 'utf8');
     for (const forbidden of ['clearStorageData', 'cookies.remove', 'removeItem', 'deleteDatabase']) {

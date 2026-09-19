@@ -84,6 +84,9 @@ ipcMain.handle('feed', async (_event, kind) => {
 
 ipcMain.handle('account', () => account.accountState());
 
+// Koden och QR-bilden till appens egen panel.
+ipcMain.handle('loginInfo', () => account.loginInfo());
+
 // Inloggningen: YouTubes egen kod-dörr. Renderaren frågar 'account' medan
 // fönstret är öppet, så ingen kanal behövs för att säga till när det är klart.
 ipcMain.handle('openLogin', () => {

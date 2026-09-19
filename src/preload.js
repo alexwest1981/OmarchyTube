@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('omarchyBridge', {
     search: (query) => ipcRenderer.invoke('search', query),
     feed: (kind) => ipcRenderer.invoke('feed', kind),
     account: () => ipcRenderer.invoke('account'),
+    loginInfo: () => ipcRenderer.invoke('loginInfo'),
     openLogin: () => ipcRenderer.invoke('openLogin'),
     play: (videoId) => ipcRenderer.invoke('play', videoId),
 });

@@ -22,9 +22,32 @@ const DOOR_URL = 'https://www.youtube.com/tv';
 const MARKERS = ['LOGIN_INFO', 'SAPISID', '__Secure-1PSID', '__Secure-3PSID', 'SID'];
 
 const partition = () => session.fromPartition(PARTITION);
+let current = null;    // den osynliga inloggningssidan, medan den används
+let qrBild = null;
 
 // Vilka kontomarkörer finns i en kaka-lista? Ren funktion, så provet kan mäta
 // den utan Electron.
+// TV-appens kod är åtta tecken i två grupper (mätt: GDM-STY-SDG). Den läses ur
+// den osynliga sidan och ritas i vår panel — användaren skall aldrig se en
+// YouTube-sida, bara sin egen app.
+const codeFrom = (text) => {
+    const m = String(text || '').match(/\b[A-Z0-9]{3,4}(?:-[A-Z0-9]{3,4}){1,2}\b/);
+    return m ? m[0] : null;
+};
+
+// Läser koden och den största bilden på sidan (TV-appens QR-kod) — bara läsning,
+// och bara de två uppgifterna. ponytail: största bilden, inte en CSS-selektor;
+// byt till en selektor om TV-appen någonsin visar något större.
+const LES_KODEN = `(function () {
+    var txt = document.body ? document.body.innerText : '';
+    var m = txt.match(/[A-Z0-9]{3,4}(?:-[A-Z0-9]{3,4}){1,2}/);
+    var bilder = Array.prototype.slice.call(document.querySelectorAll('img, canvas'))
+        .filter(function (el) { return el.tagName === 'IMG' ? el.naturalWidth >= 100 : el.width >= 100; });
+    var qr = null;
+    if (bilder[0]) { try { qr = bilder[0].tagName === 'CANVAS' ? bilder[0].toDataURL('image/png') : bilder[0].src; } catch (e) { qr = null; } }
+    return JSON.stringify({ code: m ? m[0] : null, qr: qr });
+})()`;
+
 const markersIn = (cookies) => [...new Set((cookies || []).map((c) => c.name).filter((name) => MARKERS.includes(name)))].sort();
 
 // Frågar ALLA kakor, utan domänfilter: filtret var det som gömde kontot.
@@ -49,14 +72,18 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
     const door = new BrowserWindow({
         width: 1280,
         height: 800,
+        // OSYNLIG. Ingen YouTube-sida skall synas: appen har ett fönster, och
+        // inloggningen sker med en kod som ritas i appens egen panel (mätt
+        // 2026-09-19: ett synligt dörrfönster var exakt vad Alex inte vill ha).
+        show: false,
         backgroundColor: '#0b0b0d',
         autoHideMenuBar: true,
-        title: 'Logga in på YouTube',
+        title: 'inloggning',
         // Dörren MÅSTE bo i appens partition: annars hamnar sessionen i en annan
         // burk än rutnätet läser, och inloggningen gäller ingenting (mätt
         // 2026-09-19 — dörren visade YouTubes skrivbordssida i stället för
         // TV-appens kod, och kontot syntes aldrig).
-        webPreferences: { partition: PARTITION },
+        webPreferences: { partition: PARTITION, backgroundThrottling: false },
     });
     // Identiteten sätts på själva hämtningen: med skrivbordsagenten svarar
     // YouTube med sin grå omdirigering till youtube.com (mätt 2026-09-19).
@@ -128,7 +155,9 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
       }
     }, intervalMs);
 
+    current = door;
     door.on('closed', async () => {
+        if (current === door) current = null;
         clearInterval(timer);
         // Stängde du fönstret själv? Kontrollera en gång till, så en inloggning
         // som hann klart precis då inte tappas.
@@ -144,4 +173,15 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
     return door;
 }
 
-module.exports = { PARTITION, TV_UA, DOOR_URL, MARKERS, markersIn, accountState, openDoor, partition };
+// Panelens innehåll: koden och QR-bilden, lästa ur den osynliga sidan.
+async function loginInfo() {
+    if (!current) return { open: false };
+    const raw = await current.webContents.executeJavaScript(LES_KODEN).catch(() => null);
+    if (!raw) return { open: true };
+    let läst = {};
+    try { läst = JSON.parse(raw); } catch { läst = {}; }
+    if (läst.qr) qrBild = läst.qr;   // QR:en ritas en gång och behålls
+    return { open: true, code: codeFrom(läst.code) || läst.code || null, qr: qrBild };
+}
+
+module.exports = { PARTITION, TV_UA, DOOR_URL, MARKERS, markersIn, codeFrom, accountState, openDoor, loginInfo, partition };

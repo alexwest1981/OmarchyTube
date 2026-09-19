@@ -55,16 +55,12 @@ const LES_KODEN = `(function () {
 // TV-appen visar sin inloggning bakom en "Sign in"-knapp. Att trycka på sidans
 // EGEN knapp är att använda flödet, inte att ändra sidan — och det är precis vad
 // en människa hade gjort i det synliga fönstret.
-const TRYCK_VIDARE = `(function () {
+const TRYCK_KONTO = `(function () {
     var kandidater = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'));
-    var mönster = /(get started|sign in|logga in|continue|fortsätt|next|nästa|börja|start)/i;
-    var knapp = kandidater.filter(function (el) {
-        var t = (el.textContent || '').trim();
-        return t && t.length < 40 && mönster.test(t);
-    })[0];
-    if (!knapp) return null;
-    var namn = (knapp.textContent || '').trim().slice(0, 24);
-    knapp.click();
+    var konto = kandidater.filter(function (el) { return /@/.test((el.textContent || '')); })[0];
+    if (!konto) return null;
+    var namn = (konto.textContent || '').trim().split('\n')[0].slice(0, 30);
+    konto.click();
     return namn;
 })()`;
 
@@ -198,6 +194,8 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
 // efter). Ett tryck per skärm, aldrig samma knapp två gånger, och bara på
 // sidans EGNA knappar — det är vad en människa hade gjort.
 let tryckta = [];
+let senasteSkarm = null;
+let senasteSkarmForra = null;
 let senasteBild = 0;
 
 // Koden ligger i en cross-origin-ram (mätt: hela sidans text är 330 tecken, ingen
@@ -210,13 +208,33 @@ async function loginInfo() {
     let läst = {};
     if (raw) { try { läst = JSON.parse(raw); } catch { läst = {}; } }
     const code = codeFrom(läst.code) || läst.code || null;
-    if (!code && tryckta.length < 4) {
-        const tryckte = await current.webContents.executeJavaScript(TRYCK_VIDARE).catch(() => null);
-        if (tryckte && !tryckta.includes(tryckte)) {
-            tryckta.push(tryckte);
-            console.log(`[OmarchyTube] tryckte "${tryckte}" (steg ${tryckta.length} på inloggningsskärmen)`);
+    // TV-appen styrs med fjärrkontroll: Enter väljer. Knapptexten är en gissning,
+    // Enter fungerar på varje skärm — och skärmen loggas så vi ser exakt vad den
+    // visar i stället för att gissa.
+    const skarm = `${läst.titel || ''}|${läst.langd || 0}|${(läst.knappar || []).join(',')}`;
+    if (skarm !== senasteSkarm) {
+        senasteSkarm = skarm;
+        console.log(`[OmarchyTube] skärmen: "${läst.titel || '?'}" ${läst.langd || 0} tecken | ${(läst.knappar || []).join(' | ') || '(inga knappar)'} | kod: ${code || 'nej'}`);
+    }
+    let lage = (läst.knappar || []).some((k) => k.includes('@')) ? 'konto' : 'kod';
+    if (!code && tryckta.length < 4 && skarm !== senasteSkarmForra) {
+        senasteSkarmForra = skarm;
+        // Mätt i Alex partition: TV-appen står på YouTubes kontoväljare (AlexWest,
+        // @alexwest_yt, Premium) och Enter tar den vidare. Kontoraden klickas när
+        // den finns — då är valet hans eget konto och inget annat.
+        const valt = await current.webContents.executeJavaScript(TRYCK_KONTO).catch(() => null);
+        if (valt) {
+            tryckta.push(`konto: ${valt}`);
+            console.log(`[OmarchyTube] valde kontot "${valt}" (steg ${tryckta.length})`);
+        } else {
+            await current.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+            await current.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
+            await current.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+            tryckta.push(`Enter på "${läst.titel || '?'}"`);
+            console.log(`[OmarchyTube] skickade Enter till inloggningsskärmen (steg ${tryckta.length})`);
         }
     }
+    const status = lage === 'konto' ? 'Väljer ditt konto i TV-appen …' : 'Inloggningen väntar på dig i den här rutan …';
     if (!code && Date.now() - senasteBild > 3000) {
         senasteBild = Date.now();
         try {
@@ -231,7 +249,7 @@ async function loginInfo() {
         }
     }
     if (code) console.log(`[OmarchyTube] koden läst ur sidan: ${code}`);
-    return { open: true, code, qr: qrBild };
+    return { open: true, code, qr: qrBild, status };
 }
 
 module.exports = { PARTITION, TV_UA, DOOR_URL, MARKERS, markersIn, codeFrom, accountState, openDoor, loginInfo, partition };

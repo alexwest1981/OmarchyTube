@@ -30,6 +30,7 @@ class AttrappFonster {
             on() {},
             getTitle: () => '',
             getURL: () => '',
+            executeJavaScript: async () => JSON.stringify({ lagring: ['yt.leanback.…'], sessions: [], kakor: ['PREF'], adress: 'https://www.youtube.com/tv#/' }),
         };
         skapade.push(this);
     }

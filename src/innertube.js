@@ -8,6 +8,8 @@
 // startflöden (FEwhat_to_watch, FEtrending, FEexplore) svarar 400 eller tomt
 // utan konto — därför är sökning appens ingång.
 const { net } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
 const { extractItems } = require('./innertube-extract');
 const { partition } = require('./account');
 
@@ -29,17 +31,33 @@ const CONTEXT = {
 const thumbUrl = (videoId) => `https://i.ytimg.com/vi/${videoId}/hq720.jpg`;
 
 // Sessionen följer med: anropen går i appens partition, där kontots kakor bor.
+// Finns en token (hämtad ur TV-appens egen lagring) följer den med i stället —
+// den är samma nyckel TV-appen själv använder mot YouTube.
 // Det är de som gör flödet personligt — utan konto svarar YouTube 400 eller
 // tomt (mätt 2026-09-19). Anropen presenterar sig som en vanlig webbläsare;
 // bara inloggningsdörren behöver TV-identiteten.
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
-const headers = () => ({ 'Content-Type': 'application/json', 'User-Agent': UA });
+const sessionFile = () => path.join(process.env.XDG_CONFIG_HOME || path.join(require('node:os').homedir(), '.config'), 'omarchy-tube', 'session.json');
+function storedToken() {
+    try { return JSON.parse(fs.readFileSync(sessionFile(), 'utf8')).token || null; } catch { return null; }
+}
+function storeToken(token) {
+    const file = sessionFile();
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(file, JSON.stringify({ token }), { mode: 0o600 });
+}
 
-async function post(endpoint, body) {
+const headers = (token) => {
+    const base = { 'Content-Type': 'application/json', 'User-Agent': UA };
+    const bearer = token || storedToken();
+    return bearer ? { ...base, Authorization: `Bearer ${bearer}` } : base;
+};
+
+async function post(endpoint, body, token) {
     const url = `https://www.youtube.com/youtubei/v1/${endpoint}?key=${API_KEY}&prettyPrint=false`;
     const response = await net.fetch(url, {
         method: 'POST',
-        headers: headers(),
+        headers: headers(token),
         session: partition(),
         body: JSON.stringify({ context: CONTEXT, ...body }),
     });
@@ -82,4 +100,10 @@ async function subscriptionsFeed() {
     return [];
 }
 
-module.exports = { search, recommended, subscriptionsFeed, thumbUrl, API_KEY, CONTEXT };
+// Provning: fungerar en token vi hittat i TV-appens lagring? Returnerar antalet
+// videor flödet svarar — 0 betyder nej, och då loggas aldrig själva token.
+async function recommendedWith(token) {
+    return extractItems(await post('browse', { browseId: 'FEwhat_to_watch' }, token));
+}
+
+module.exports = { search, recommended, recommendedWith, subscriptionsFeed, storeToken, storedToken, thumbUrl, API_KEY, CONTEXT };

@@ -24,7 +24,7 @@ for (const level of ['log', 'error']) {
         try { fs.appendFileSync(LOG_FILE, args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n'); } catch { /* tyst */ }
     };
 }
-const { search, recommended, subscriptionsFeed } = require('./innertube');
+const { search, recommended, recommendedWith, subscriptionsFeed, storeToken } = require('./innertube');
 const { play, stop } = require('./player');
 const account = require('./account');
 
@@ -49,9 +49,14 @@ function createWindow() {
 
     win.loadFile(path.join(__dirname, 'browse.html'));
     win.webContents.on('did-finish-load', async () => {
-        const [w, h] = win.getSize();
         const state = await account.accountState();
-        console.log(`[OmarchyTube] rutan ${w}x${h} | fullskärm ${win.isFullScreen()} | ${state.signedIn ? `konto: ${state.markers.join(', ')}` : 'inget konto'}`);
+        const rad = (när) => {
+            const [w, h] = win.getSize();
+            console.log(`[OmarchyTube] ${när}: rutan ${w}x${h} | fullskärm ${win.isFullScreen()} | ${state.signedIn ? `konto: ${state.markers.join(', ')}` : 'inget konto'}`);
+        };
+        rad('vid start');
+        // Fullskärmsbegäran är inte omedelbar; mät den igen när kompositor hunnit svara.
+        setTimeout(() => rad('efter 3 s'), 3000);
     });
     win.webContents.on('before-input-event', (event, input) => {
         if (input.type !== 'keyDown') return;
@@ -86,6 +91,20 @@ ipcMain.handle('openLogin', () => {
         // Provet: samma anrop rutnätet behöver. Svarar YouTube med videor betyder
         // det att sessionen bär ett konto — oavsett vad kakburken heter inuti.
         probe: async () => (await recommended()).length,
+        // Hittar dörren något som liknar en nyckel i TV-appens lagring provas den
+        // mot YouTube. Fungerar den sparas den — och loggen nämner bara NAMNET,
+        // aldrig nyckeln (den är kontots).
+        onStorage: async (par) => {
+            for (const [namn, varde] of par) {
+                if (typeof varde !== 'string' || varde.length < 20) continue;
+                const antal = await recommendedWith(varde).then((items) => items.length).catch(() => 0);
+                console.log(`[OmarchyTube] provar "${namn}": ${antal} videor`);
+                if (antal > 0) {
+                    storeToken(varde);
+                    console.log(`[OmarchyTube] sessionen hittad i "${namn}" och sparad — appen är inloggad`);
+                }
+            }
+        },
         onSignedIn: (state) => console.log(`[OmarchyTube] dörren stängd, kontot i partitionen (${state.via})`),
     });
     return { opened: true };

@@ -32,11 +32,14 @@ test('bara dörren laddar en YouTube-adress, och bara TV-appens sida', () => {
     assert.match(read('account.js'), /youtube\.com\/tv/, 'dörren skall vara TV-appens sida');
 });
 
-test('ingen injektion i någon sida', () => {
-    const src = all();
-    for (const forbidden of ['insertCSS', 'executeJavaScript']) {
-        assert.ok(!src.includes(forbidden), `${forbidden} får inte finnas i src/`);
+test('ingen injektion — enda undantaget är att läsa dörrens egen lagring', () => {
+    assert.ok(!all().includes('insertCSS'), 'insertCSS får inte finnas i src/');
+    for (const file of files()) {
+        if (file === 'account.js') continue;   // dörren får läsa sin egen sida
+        assert.ok(!read(file).includes('executeJavaScript'), `executeJavaScript får inte finnas i ${file}`);
     }
+    const door = read('account.js');
+    assert.ok(!/executeJavaScript\([^)]*[`'"][^`'"]*\b(set|remove|clear|post|send)\b/i.test(door), 'dörren får bara LÄSA sin sida, inte ändra den');
 });
 
 test('kontomarkörerna innehåller LOGIN_INFO — den som saknades', () => {

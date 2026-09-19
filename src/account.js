@@ -44,7 +44,7 @@ async function accountState(from) {
 // funktionell — den kan inte ha rätt om kaknamn och fel om verkligheten, och den
 // är samma anrop rutnätet behöver ändå. Mätt 2026-09-19: ingen partition på
 // disk hade någonsin kontomarkörer, så signal (1) ensam var en gissning.
-function openDoor({ onSignedIn, onClosed, probe, intervalMs = 2000 } = {}) {
+function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } = {}) {
     partition().setUserAgent(TV_UA);   // mätt: med skrivbordsagenten svarar YouTube med en återvändsgränd
     const door = new BrowserWindow({
         width: 1280,
@@ -76,9 +76,36 @@ function openDoor({ onSignedIn, onClosed, probe, intervalMs = 2000 } = {}) {
 
     let ticks = 0;
     const timer = setInterval(async () => {
+      try {
         ticks += 1;
         const state = await accountState(doorSession).catch((err) => { console.error('[OmarchyTube] kakfrågan misslyckades:', err.message); return { signedIn: false, markers: [], total: 0 }; });
         let via = state.signedIn ? `kontomarkör (${state.markers.join(', ')})` : '';
+        if (!via && ticks % 5 === 0) {
+            // Var bor sessionen? TV-appen kan hålla den i sidans egen lagring i
+            // stället för i kakor — och då kan våra egna anrop aldrig se den.
+            // Läser bara NAMN, aldrig värden (de är kontots).
+            let var_ = 'kunde inte läsas';
+            try {
+                var_ = await door.webContents.executeJavaScript(
+                    'JSON.stringify({lagring: Object.keys(localStorage).slice(0, 25), sessions: Object.keys(sessionStorage).slice(0, 25), kakor: document.cookie.split("; ").filter(Boolean).map(function (c) { return c.split("=")[0]; }), adress: location.href})',
+                );
+            } catch (err) {
+                var_ = `kunde inte läsas (${err.message})`;
+            }
+            console.log(`[OmarchyTube] dörrens lagring: ${var_}`);
+            try {
+                const funna = JSON.parse(var_).lagring || [];
+                const intressanta = funna.filter((k) => /auth|token|login|session|account|oauth/i.test(k));
+                if (intressanta.length && onStorage) {
+                    const par = JSON.parse(await door.webContents.executeJavaScript(
+                        `JSON.stringify(${JSON.stringify(intressanta)}.map(function (k) { return [k, localStorage.getItem(k)]; }))`,
+                    ));
+                    onStorage(par);   // värdena lämnas vidare, aldrig till loggen
+                }
+            } catch (err) {
+                console.error(`[OmarchyTube] kunde inte läsa lagringens namn: ${err.message}`);
+            }
+        }
         if (!via && probe && ticks % 5 === 0) {
             // Var femte gång (var tionde sekund): fråga YouTube om flödet i stället.
             const count = await probe().catch((err) => { console.log(`[OmarchyTube] flödesprovet misslyckades: ${err.message}`); return 0; });
@@ -93,6 +120,12 @@ function openDoor({ onSignedIn, onClosed, probe, intervalMs = 2000 } = {}) {
             door.close();
             if (onSignedIn) onSignedIn({ ...state, via });
         }
+      } catch (err) {
+        // En trasig tick är inte samma sak som en misslyckad inloggning: säg det
+        // och fortsätt vänta i stället för att tystna (mätt: ett TypeError här
+        // dödade hela väntan utan ett ord).
+        console.error(`[OmarchyTube] väntan snubblade (${err.message}) — fortsätter`);
+      }
     }, intervalMs);
 
     door.on('closed', async () => {

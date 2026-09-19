@@ -55,12 +55,17 @@ const LES_KODEN = `(function () {
 // TV-appen visar sin inloggning bakom en "Sign in"-knapp. Att trycka på sidans
 // EGEN knapp är att använda flödet, inte att ändra sidan — och det är precis vad
 // en människa hade gjort i det synliga fönstret.
-const TRYCK_INLOGGNING = `(function () {
+const TRYCK_VIDARE = `(function () {
     var kandidater = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'));
-    var knapp = kandidater.filter(function (el) { return /(^|\s)(sign in|logga in)(\s|$)/i.test((el.textContent || '').trim()); })[0];
-    if (!knapp) return 'ingen inloggningsknapp';
+    var mönster = /(get started|sign in|logga in|continue|fortsätt|next|nästa|börja|start)/i;
+    var knapp = kandidater.filter(function (el) {
+        var t = (el.textContent || '').trim();
+        return t && t.length < 40 && mönster.test(t);
+    })[0];
+    if (!knapp) return null;
+    var namn = (knapp.textContent || '').trim().slice(0, 24);
     knapp.click();
-    return 'tryckte "' + (knapp.textContent || '').trim().slice(0, 24) + '"';
+    return namn;
 })()`;
 
 const markersIn = (cookies) => [...new Set((cookies || []).map((c) => c.name).filter((name) => MARKERS.includes(name)))].sort();
@@ -189,7 +194,10 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
 }
 
 // Panelens innehåll: koden och QR-bilden, lästa ur den osynliga sidan.
-let klickad = false;
+// TV-appen går genom flera skärmar (mätt: "Get started" först, inloggningen
+// efter). Ett tryck per skärm, aldrig samma knapp två gånger, och bara på
+// sidans EGNA knappar — det är vad en människa hade gjort.
+let tryckta = [];
 let senasteBild = 0;
 
 // Koden ligger i en cross-origin-ram (mätt: hela sidans text är 330 tecken, ingen
@@ -202,10 +210,12 @@ async function loginInfo() {
     let läst = {};
     if (raw) { try { läst = JSON.parse(raw); } catch { läst = {}; } }
     const code = codeFrom(läst.code) || läst.code || null;
-    if (!code && !klickad && läst.knappar && läst.knappar.length) {
-        klickad = true;
-        const gjort = await current.webContents.executeJavaScript(TRYCK_INLOGGNING).catch((err) => `fel: ${err.message}`);
-        console.log(`[OmarchyTube] sidan ville ha ett tryck: ${gjort} (knappar: ${läst.knappar.join(' | ')})`);
+    if (!code && tryckta.length < 4) {
+        const tryckte = await current.webContents.executeJavaScript(TRYCK_VIDARE).catch(() => null);
+        if (tryckte && !tryckta.includes(tryckte)) {
+            tryckta.push(tryckte);
+            console.log(`[OmarchyTube] tryckte "${tryckte}" (steg ${tryckta.length} på inloggningsskärmen)`);
+        }
     }
     if (!code && Date.now() - senasteBild > 3000) {
         senasteBild = Date.now();

@@ -36,6 +36,21 @@ omarchy-tube --tv       # starta på youtube.com/tv
 omarchy-tube --desktop  # starta på youtube.com
 ```
 
+## De två layouterna, och vilken man skall leva i
+
+YouTubes TV-layout är ett **tiofotsgränssnitt**: byggt för en soffa tre meter från
+teven. Alltså en hylla i taget, två till tre mycket stora brickor, och konst skalad
+för det avståndet — nivåerna YouTube serverar är 320×180, 480×360, 640×480 och
+1280×720, och en bricka 600 px bred från en 480 px-källa ser precis så mjuk ut som
+det låter. Den lyder inte heller zoom, eftersom skalan är byggd i `rem` mot
+fönsterbredden.
+
+Skrivbordslayouten är den för en skärm: flera rader, fyra till sex kolumner och
+skarpa bilder. TV-layouten finns här som **inloggningsdörr** och för en stor skärm på
+avstånd; skrivbordslayouten är den man tittar i. <kbd>F2</kbd> växlar, och när du väl
+är inloggad är den tangenten ett riktigt val som sparas. Dörren skriver aldrig över
+det: efter inloggning kommer du tillbaka till layouten du stod i.
+
 ## Hur många videor som får plats
 
 Korten storleksbestäms av sidans egna brytpunkter, så att zooma ut **vyn** ger plats
@@ -119,7 +134,7 @@ läge behöver, och att blockera YouTubes annonsändpunkter i nätverkslagret.
 npm test
 ```
 
-43 prov: dörren, städningen, fångstgrinden, zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
+44 prov: dörren, städningen, fångstgrinden, lägesvalet, zoomstegen, inloggningsbeslutet, profilreglerna (id:n måste tåla att bli partitionsnamn, två profiler får
 aldrig dela en), webbläsaridentiteten per läge, inloggningsbeslutet, IPC-kanalerna,
 och ett arkitekturprov som fäller om en injektor, ett zoom-anrop eller ett
 sidskript kommer tillbaka.

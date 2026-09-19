@@ -73,12 +73,18 @@ function writeState(patch) {
     }
 }
 
-// Skrivbordsläge är standard: YouTubes TV-app räknar sin textskala ur
-// fönsterbredden i kvadrat (mätt: 941 px gav rotfont 5,88 px mot 24 px vid 1920),
-// så TV-läget vill ha en bred skärm och skall vara ett val, inte en överraskning.
-let currentMode = argv.includes('--tv') ? 'tv'
+// Användarens läge (sparas) och läget rutan står i just nu. Dörren är ett tillfälligt
+// besök i TV-läget och får ALDRIG skriva över användarens val — mätt 2026-09-19:
+// dörren sparade 'tv', och efter inloggningen gick appen tillbaka till
+// 10-fotslayouten (en rad, två stora lågupplösta kort) i stället för
+// skrivbordslayouten han ville ha.
+//
+// Skrivbordsläge är standard: TV-appen är byggd för en soffa tre meter bort, med
+// stora brickor och lågupplöst konst, och den lyder inte zoom (rem mot bredden).
+let userMode = argv.includes('--tv') ? 'tv'
     : argv.includes('--desktop') ? 'desktop'
-        : (readState().mode || 'desktop');
+        : (readState().userMode || 'desktop');
+let currentMode = userMode;
 
 // Zoomen sparas per användare: den är en kalibrering för hans skärm och ögon, inte
 // en konstant. Standard 0,80 ger 2400 CSS-px i en 1920-ruta ⇒ 5–6 kort i bredd i
@@ -134,9 +140,14 @@ function applyZoom(win, next) {
     return currentZoom;
 }
 
-function applyMode(newMode) {
+// persist = användarens eget val (F2 när man är inloggad, eller --tv/--desktop).
+// Dörren och vakten byter läge utan att spara.
+function applyMode(newMode, { persist = false } = {}) {
     currentMode = newMode;
-    writeState({ mode: currentMode });
+    if (persist) {
+        userMode = newMode;
+        writeState({ userMode });
+    }
     app.userAgentFallback = getUserAgentForMode(currentMode);
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.setUserAgent(getUserAgentForMode(currentMode));
@@ -215,7 +226,7 @@ function createWindow(profile) {
     win.on('close', () => {
         try {
             const bounds = win.getBounds();
-            writeState({ width: bounds.width, height: bounds.height, mode: currentMode });
+            writeState({ width: bounds.width, height: bounds.height });
         } catch (err) {
             // Stängningen får inte falla på att läget inte kunde sparas.
         }
@@ -259,7 +270,14 @@ function createWindow(profile) {
             return;
         }
         if (input.key === 'F2') {
-            switchMode(currentMode === 'tv' ? 'desktop' : 'tv');
+            // Inloggad: F2 är ett riktigt val, och det sparas. Utloggad: F2 är dörren
+            // till QR-koden, och dörren rör inte användarens läge.
+            sessionOfWindow(win).cookies.get({ domain: '.youtube.com' })
+                .then((cookies) => {
+                    if (isSignedIn(cookies)) switchMode(currentMode === 'tv' ? 'desktop' : 'tv', { persist: true });
+                    else switchMode('tv');
+                })
+                .catch(() => switchMode('tv'));
             event.preventDefault();
             return;
         }
@@ -327,8 +345,8 @@ function showPicker(win) {
     return win;
 }
 
-function switchMode(newMode) {
-    applyMode(newMode);
+function switchMode(newMode, { persist = false } = {}) {
+    applyMode(newMode, { persist });
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
 
@@ -336,7 +354,7 @@ function switchMode(newMode) {
     // tillbaka till användarens läge så fort kontot finns — annars blir dörren ett
     // rum man fastnar i.
     if (currentMode === 'tv') {
-        openSignInDoor(win, session.fromPartition(partitionOfWindow(win)));
+        openSignInDoor(win, sessionOfWindow(win));
         return;
     }
     win.loadURL(pageForMode('desktop'));
@@ -401,7 +419,7 @@ async function forgetVisitor(targetSession) {
 // popup eller navigering), F2, eller en utloggad profil som startar i TV-läget.
 async function openSignInDoor(win, targetSession) {
     if (!win || win.isDestroyed()) return;
-    await forgetVisitor(targetSession);
+    const wasVisitor = await forgetVisitor(targetSession);
     if (win.isDestroyed()) return;
 
     const plan = signInPlan();
@@ -410,7 +428,9 @@ async function openSignInDoor(win, targetSession) {
     console.log('[OmarchyTube] Inloggningsdörren: TV-appens första val är "Get started" — ett Enter ger QR-koden och de åtta tecknen. F4 öppnar yt.be/activate.');
     win.setTitle('OmarchyTube — tryck Enter för QR-koden');
     logViewport(win);
-    watchForSignIn(win, targetSession);
+    // Vakten finns för att följa en inloggning som pågår — en inloggad profil behöver
+    // den inte, och skulle bara ladda om dörren i onödan.
+    if (wasVisitor) watchForSignIn(win, targetSession);
 }
 
 // Googles lösenordsväg är stängd för inbäddade webbläsare. I stället för att visa
@@ -418,8 +438,10 @@ async function openSignInDoor(win, targetSession) {
 function routeToSignInDoor(win) {
     if (!win || win.isDestroyed()) return;
     console.log('[OmarchyTube] Google-inloggning i en inbäddad webbläsare är stängd — öppnar TV-dörren (QR-koden).');
-    openSignInDoor(win, session.fromPartition(partitionOfWindow(win)));
+    openSignInDoor(win, sessionOfWindow(win));
 }
+
+const sessionOfWindow = (win) => sessionOfWindow(win);
 
 function partitionOfWindow(win) {
     const id = windowProfiles.get(win.webContents.id);
@@ -448,13 +470,14 @@ function watchForSignIn(win, customSession) {
         customSession.cookies.get({ domain: '.youtube.com' })
             .then((cookies) => {
                 if (!isSignedIn(cookies)) return; // fortfarande utloggad
-                const mode = readState().mode || 'desktop';
                 clearInterval(timer);
                 watchedWindows.delete(win.webContents.id);
                 if (win.isDestroyed()) return;
-                console.log(`[OmarchyTube] Kontot finns i sessionen — tillbaka till ${mode}-läget.`);
-                applyMode(mode);
-                win.loadURL(pageForMode(mode));
+                // Tillbaka till användarens läge — inte till det dörren lånade.
+                const back = userMode;
+                console.log(`[OmarchyTube] Kontot finns i sessionen — tillbaka till ${back}-läget.`);
+                applyMode(back);
+                win.loadURL(pageForMode(back));
                 logViewport(win);
             })
             .catch((err) => console.warn('[OmarchyTube] Kunde inte läsa sessionen:', err.message));

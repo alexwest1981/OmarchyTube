@@ -98,7 +98,21 @@ test('städningen rör aldrig ett konto', () => {
 test('en vakt per ruta, och den går tillbaka till användarens läge', () => {
     assert.match(code, /watchedWindows\.has\(win\.webContents\.id\)/, 'ingen spärr mot staplade vakter');
     assert.match(code, /customSession\.cookies\.get\(\{ domain: '\.youtube\.com' \}\)/, 'ingen vakt på sessionen');
-    assert.match(code, /Kontot finns i sessionen[\s\S]{0,400}loadURL\(pageForMode\(mode\)\)/, 'appen går inte tillbaka till användarens läge efter inloggning');
+    assert.match(code, /const back = userMode;/, 'vakten minns inte användarens läge');
+    assert.match(code, /Kontot finns i sessionen[\s\S]{0,400}loadURL\(pageForMode\(back\)\)/, 'appen går inte tillbaka till användarens läge efter inloggning');
+});
+
+test('dörren får aldrig skriva över användarens läge', () => {
+    // Mätt 2026-09-19: dörren sparade 'tv', och efter inloggningen stod appen kvar i
+    // 10-fotslayouten — en rad, två stora lågupplösta kort — i stället för
+    // skrivbordslayouten användaren ville ha.
+    assert.match(code, /writeState\(\{ userMode \}\)/, 'användarens läge sparas inte under egen nyckel');
+    assert.ok(!code.includes('writeState({ mode'), 'läget skrivs utan att skilja på användarens val och dörrens besök');
+    for (const door of ['openSignInDoor', 'routeToSignInDoor']) {
+        const body = code.match(new RegExp('function ' + door + '[\\s\\S]*?\\n\\}'));
+        assert.ok(body, 'hittade ingen ' + door);
+        assert.ok(!body[0].includes('persist: true'), door + ' sparar sitt läge som användarens val');
+    }
 });
 
 test('Googles blockerade inloggningsväg leder till dörren — genom en funktion', () => {

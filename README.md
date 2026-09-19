@@ -35,6 +35,21 @@ omarchy-tube --tv       # start on youtube.com/tv
 omarchy-tube --desktop  # start on youtube.com
 ```
 
+## The two layouts, and which one to live in
+
+YouTube's TV layout is a **ten-foot interface**: it is designed for a sofa three
+metres away from a television. That means one shelf at a time, two or three very
+large tiles, and artwork scaled for that distance — the image tiers YouTube serves
+are 320×180, 480×360, 640×480 and 1280×720, and a tile 600 px wide from a 480 px
+source looks exactly as soft as it sounds. It also does not obey zoom, because its
+scale is built in `rem` against the window width.
+
+The desktop layout is the one for a monitor: several rows, four to six columns, and
+sharp artwork. The TV layout is here as the **sign-in door** and for a big screen
+at a distance; the desktop layout is the one you watch in. <kbd>F2</kbd> switches,
+and once you are signed in that key is a real choice that is remembered. The door
+itself never writes over it: signing in returns you to the layout you were in.
+
 ## How many videos fit
 
 Cards are sized by the page's own breakpoints, so zooming the **view** out fits
@@ -122,7 +137,7 @@ the network layer.
 npm test
 ```
 
-43 tests: the sign-in door, its clearing, and the interception guard, the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
+44 tests: the sign-in door, its clearing, the interception guard, the mode choice, the zoom steps, the sign-in decision, the profile rules (ids must survive being partition names, two profiles
 may never share one), the user agent per mode, the sign-in decision, the IPC
 channels, and an architecture test that fails if an injector, a page script or a
 second zoom mechanism ever comes back.

@@ -47,6 +47,7 @@ function openDoor({ onSignedIn, onClosed } = {}) {
         // burk än rutnätet läser, och inloggningen gäller ingenting (mätt
         // 2026-09-19 — dörren visade YouTubes skrivbordssida i stället för
         // TV-appens kod, och kontot syntes aldrig).
+        webPreferences: { partition: PARTITION },
     });
     // Identiteten sätts på själva hämtningen: med skrivbordsagenten svarar
     // YouTube med sin grå omdirigering till youtube.com (mätt 2026-09-19).

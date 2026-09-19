@@ -28,9 +28,13 @@ const partition = () => session.fromPartition(PARTITION);
 const markersIn = (cookies) => [...new Set((cookies || []).map((c) => c.name).filter((name) => MARKERS.includes(name)))].sort();
 
 // Frågar ALLA kakor, utan domänfilter: filtret var det som gömde kontot.
-async function accountState() {
-    const markers = markersIn(await partition().cookies.get({}));
-    return { signedIn: markers.length > 0, markers };
+// Sessionen kan ges in (dörren frågar sin egen, så avkänningen aldrig kan läsa
+// en annan burk än den som loggar in).
+async function accountState(from) {
+    const ses = from || partition();
+    const all = await ses.cookies.get({});
+    const markers = markersIn(all);
+    return { signedIn: markers.length > 0, markers, total: all.length };
 }
 
 // Dörren: ett fönster med TV-appen, som visar sin kod och inget annat.
@@ -52,10 +56,21 @@ function openDoor({ onSignedIn, onClosed } = {}) {
     // Identiteten sätts på själva hämtningen: med skrivbordsagenten svarar
     // YouTube med sin grå omdirigering till youtube.com (mätt 2026-09-19).
     door.loadURL(DOOR_URL, { userAgent: TV_UA });
+    // Dörren skall läsa sin EGEN session, och den skall vara rutnätets. Electron
+    // returnerar samma sessionsobjekt för samma partitionsnamn, så en jämförelse
+    // avgör saken direkt — i stället för att upptäckas först när kontot uteblir.
+    const samma = door.webContents.session === partition();
+    console.log(`[OmarchyTube] dörrens session är rutnätets: ${samma ? 'ja' : 'NEJ — inloggningen skulle hamna i fel burk'}`);
+    const doorSession = door.webContents.session;
     console.log(`[OmarchyTube] inloggningsfönstret öppnat: ${DOOR_URL} (skanna koden med telefonen)`);
+    // Inventeringen: om något inte stämmer svarar nästa loggrad på var sessionen
+    // bor, i stället för att kräva ännu en mätning (samma regel som för kakorna).
+    partition().cookies.get({}).then((all) => {
+        console.log(`[OmarchyTube] partitionen har ${all.length} kakor innan inloggning: ${[...new Set(all.map((c) => c.name))].sort().join(', ') || '(inga)'}`);
+    }).catch((err) => console.error('[OmarchyTube] kunde inte läsa partitionen:', err.message));
 
     const timer = setInterval(async () => {
-        const state = await accountState();
+        const state = await accountState(doorSession);
         if (state.signedIn) {
             clearInterval(timer);
             console.log(`[OmarchyTube] inloggad — kontot syns i partitionen (${state.markers.join(', ')})`);
@@ -65,8 +80,17 @@ function openDoor({ onSignedIn, onClosed } = {}) {
         }
     }, 2000);
 
-    door.on('closed', () => {
+    door.on('closed', async () => {
         clearInterval(timer);
+        // Stängde du fönstret själv? Kontrollera en gång till, så en inloggning
+        // som hann klart precis då inte tappas.
+        const state = await accountState(doorSession).catch(() => ({ signedIn: false }));
+        if (state.signedIn) {
+            console.log(`[OmarchyTube] kontot hittades när fönstret stängdes (${state.markers.join(', ')})`);
+            await partition().flushStorageData()
+                .catch((err) => console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message));
+            if (onSignedIn) onSignedIn(state);
+        }
         if (onClosed) onClosed();
     });
     return door;

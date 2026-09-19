@@ -37,6 +37,12 @@ test('dörren städar ingenting — den bara visar sin kod', () => {
     }
 });
 
+test('dörren bor i appens partition — annars gäller inloggningen ingenting', () => {
+    const door = fs.readFileSync(path.join(SRC, 'account.js'), 'utf8');
+    assert.match(door, /webPreferences:\s*\{\s*partition:\s*PARTITION\s*\}/, 'dörrfönstret skall dela partition med rutnätet (mätt 2026-09-19)');
+    assert.match(door, /loadURL\(DOOR_URL,\s*\{\s*userAgent:\s*TV_UA\s*\}\)/, 'identiteten skall sättas på hämtningen');
+});
+
 test('dörren presenterar TV-identiteten — skrivbordsagenten ger en återvändsgränd', () => {
     assert.match(account.TV_UA, /Web0S|SmartTV|Tizen/, 'dörren skall använda en TV-agent (mätt 2026-09-19)');
     assert.match(account.DOOR_URL, /^https:\/\/www\.youtube\.com\/tv$/);

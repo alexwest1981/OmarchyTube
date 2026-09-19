@@ -27,7 +27,7 @@ test('sessionen skrivs till disk, annars börjar nästa start om', () => {
 });
 
 test('bara dörren laddar en YouTube-adress, och bara TV-appens sida', () => {
-    const loaded = [...all().matchAll(/loadURL\(([^)]*)\)/g)].map((m) => m[1]);
+    const loaded = [...all().matchAll(/loadURL\(([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
     assert.deepStrictEqual(loaded, ['DOOR_URL'], `bara dörrens adress får laddas, hittade: ${loaded.join(', ')}`);
     assert.match(read('account.js'), /youtube\.com\/tv/, 'dörren skall vara TV-appens sida');
 });

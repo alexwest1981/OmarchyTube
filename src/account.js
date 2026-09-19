@@ -43,8 +43,14 @@ function openDoor({ onSignedIn, onClosed } = {}) {
         backgroundColor: '#0b0b0d',
         autoHideMenuBar: true,
         title: 'Logga in på YouTube',
+        // Dörren MÅSTE bo i appens partition: annars hamnar sessionen i en annan
+        // burk än rutnätet läser, och inloggningen gäller ingenting (mätt
+        // 2026-09-19 — dörren visade YouTubes skrivbordssida i stället för
+        // TV-appens kod, och kontot syntes aldrig).
     });
-    door.loadURL(DOOR_URL);
+    // Identiteten sätts på själva hämtningen: med skrivbordsagenten svarar
+    // YouTube med sin grå omdirigering till youtube.com (mätt 2026-09-19).
+    door.loadURL(DOOR_URL, { userAgent: TV_UA });
     console.log(`[OmarchyTube] inloggningsfönstret öppnat: ${DOOR_URL} (skanna koden med telefonen)`);
 
     const timer = setInterval(async () => {

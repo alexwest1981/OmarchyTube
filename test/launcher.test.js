@@ -99,13 +99,13 @@ test('dörren städar besökskakorna innan TV-sidan laddas', () => {
 test('städningen rör aldrig ett konto', () => {
     const guard = code.match(/async function forgetVisitor[\s\S]*?\n\}/);
     assert.ok(guard, 'hittade ingen forgetVisitor');
-    assert.match(guard[0], /if \(isSignedIn\(cookies\)\) return false;/, 'städningen kontrollerar inte om kontot finns');
+    assert.match(guard[0], /if \(isSignedIn\(cookies\)\) \{[\s\S]{0,120}return false;/, 'städningen kontrollerar inte om kontot finns');
     assert.match(guard[0], /cookies\.remove\(/, 'städningen tar inga kakor');
 });
 
 test('en vakt per ruta, och den går tillbaka till användarens läge', () => {
     assert.match(code, /watchedWindows\.has\(win\.webContents\.id\)/, 'ingen spärr mot staplade vakter');
-    assert.match(code, /customSession\.cookies\.get\(\{ domain: '\.youtube\.com' \}\)/, 'ingen vakt på sessionen');
+    assert.match(code, /sessionCookies\(customSession\)/, 'ingen vakt på sessionen');
     assert.match(code, /const back = userMode;/, 'vakten minns inte användarens läge');
     assert.match(code, /Kontot finns i sessionen[\s\S]{0,400}loadURL\(pageForMode\(back\)\)/, 'appen går inte tillbaka till användarens läge efter inloggning');
 });
@@ -136,10 +136,10 @@ test('fångsten gäller bara skrivbordsläget — dörren äger sin egen inloggn
     // Mätt 2026-09-19: TV-appens egen inloggning går via Google. Fångade vi den
     // revs sidan och användaren släpptes tillbaka i TV-flödet utan att ha fått
     // fylla i något — tre skärmbilder visade loopen.
-    assert.match(code, /did-navigate[\s\S]{0,200}currentMode === 'desktop' && isBlockedSignIn\(url\)/,
-        'navigeringsfångsten gäller även i TV-läget — då kapas TV-appens inloggning');
-    assert.match(code, /if \(isBlockedSignIn\(url\)\) \{[\s\S]{0,300}if \(currentMode === 'desktop'\) routeToSignInDoor\(win\);/,
-        'popup-fångsten gäller även i TV-läget');
+    assert.match(code, /did-navigate[\s\S]{0,240}currentMode === 'desktop' && !isSignedInCached\(win\) && isBlockedSignIn\(url\)/,
+        'navigeringsfångsten gäller även i TV-läget eller för en inloggad ruta — då kapas inloggningen eller kastas man tillbaka till TV');
+    assert.match(code, /if \(isBlockedSignIn\(url\)\) \{[\s\S]{0,300}if \(currentMode === 'desktop' && !isSignedInCached\(win\)\) routeToSignInDoor\(win\);/,
+        'popup-fångsten gäller även i TV-läget eller för en inloggad ruta');
 });
 
 test('städningen tar lokal lagring också, inte bara kakor', () => {
@@ -157,6 +157,23 @@ test("'closed' läser aldrig webContents, som redan är förstörd", () => {
     assert.ok(closed, 'hittade ingen closed-hanterare');
     assert.ok(!closed[0].includes('win.webContents.id'), 'webContents läses efter stängning');
     assert.match(main, /const contentsId = win\.webContents\.id;/, 'id:t fångas inte före stängningen');
+});
+
+test('kakfrågan ställs utan domänfilter — gissningen kostade sessionen', () => {
+    // Alex 2026-09-19: "det verkar inte sparas något på datorn, utan man måste logga
+    // in varje gång". Domänfiltret kunde svara "utloggad" medan kontot fanns, och då
+    // städade dörren bort sessionen. Frågan ställs nu utan filter, och svaret loggas.
+    assert.ok(!code.includes("domain: '.youtube.com'"), 'domänfiltret är tillbaka — det är en gissning om var kakan ligger');
+    assert.match(code, /const sessionCookies = \(targetSession\) => targetSession\.cookies\.get\(\{\}\)/, 'kakorna frågas inte utan filter');
+    assert.match(code, /describeSession\(cookies\)/, 'svaret loggas inte, så det går inte att läsa av');
+});
+
+test('sessionen skrivs till disk innan processen dör', () => {
+    // Appen startas om med pkill (SIGTERM); Chromium skriver kakor periodiskt, inte
+    // nödvändigtvis innan processen dör.
+    assert.match(code, /flushStorageData\(\)/, 'sessionen tvingas inte till disk');
+    assert.match(code, /app\.on\('before-quit', flushSessions\)/, 'ingen städning vid avslut');
+    assert.match(code, /win\.on\('close', \(\) => \{\s*flushSessions\(\)/, 'ingen skrivning när fönstret stängs');
 });
 
 test('paketeringen hittar fortfarande sin ingång', () => {

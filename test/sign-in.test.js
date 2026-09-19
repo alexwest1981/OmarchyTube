@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { DESKTOP_PAGE, TV_PAGE, isBlockedSignIn, isSignedIn, planForSession, signInPlan } = require('../src/sign-in');
+const { DESKTOP_PAGE, TV_PAGE, isBlockedSignIn, isSignedIn, planForSession, sessionCookieNames, signInPlan } = require('../src/sign-in');
 
 const session = [{ name: 'SID', value: 'x' }];
 
@@ -22,6 +22,17 @@ test('bara Googles egna sessionskakor räknas', () => {
     assert.strictEqual(isSignedIn([{ name: 'PREF' }, { name: 'VISITOR_INFO1_LIVE' }]), false);
     assert.strictEqual(isSignedIn([]), false);
     assert.strictEqual(isSignedIn(), false);
+});
+
+test('LOGIN_INFO och en kaka på värden räknas också — det var felet', () => {
+    // YouTube sätter LOGIN_INFO (YouTubes egen inloggningsmarkör), och en kaka kan
+    // ligga på värden www.youtube.com i stället för domänen .youtube.com. Den första
+    // namnlistan hade ingen av dem, och domänfiltret kunde dessutom dölja dem — så
+    // appen svarade "utloggad" medan kontot fanns och städade bort sessionen
+    // (Alex symptom 2026-09-19: QR-koden krävdes varje gång).
+    assert.strictEqual(isSignedIn([{ name: 'LOGIN_INFO', domain: '.youtube.com' }]), true);
+    assert.strictEqual(isSignedIn([{ name: '__Secure-1PSID', domain: 'www.youtube.com' }]), true);
+    assert.deepStrictEqual(sessionCookieNames([{ name: 'PREF' }, { name: 'LOGIN_INFO' }]), ['LOGIN_INFO']);
 });
 
 test('bara den BLOCKERADE lösenordsvägen fångas', () => {

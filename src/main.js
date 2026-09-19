@@ -27,7 +27,7 @@ const path = require('path');
 
 const { addProfile, findProfile, partitionFor, readProfiles, removeProfile, writeProfiles } = require('./profiles');
 const { getUserAgentForMode } = require('./user-agent');
-const { TV_PAGE, isBlockedSignIn, isSignedIn, pageForMode, planForSession, signInPlan } = require('./sign-in');
+const { TV_PAGE, isBlockedSignIn, isSignedIn, pageForMode, planForSession, sessionCookieNames, signInPlan } = require('./sign-in');
 const { DEFAULT: DEFAULT_ZOOM, clampZoom, nextZoom } = require('./zoom');
 
 // Spelaren startar när sidan byts (användaren tryckte Enter i TV-appen och
@@ -188,6 +188,7 @@ function createWindow(profile) {
         configureSession(customSession);
         configuredPartitions.add(key);
     }
+    sessionsToFlush.set(key, customSession);
 
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
     const state = readState();
@@ -224,6 +225,7 @@ function createWindow(profile) {
     if (profile) windowProfiles.set(contentsId, profile.id);
     win.on('focus', () => { mainWindow = win; });
     win.on('close', () => {
+        flushSessions(); // skriv sessionen innan fönstret försvinner
         try {
             const bounds = win.getBounds();
             writeState({ width: bounds.width, height: bounds.height });
@@ -234,6 +236,7 @@ function createWindow(profile) {
     win.on('closed', () => {
         windowProfiles.delete(contentsId);
         watchedWindows.delete(contentsId);
+        signedInByContents.delete(contentsId);
         if (mainWindow === win) mainWindow = null;
     });
 
@@ -245,7 +248,7 @@ function createWindow(profile) {
             // Popup-vägen till Googles lösenordsformulär: stäng den och öppna dörren
             // Google faktiskt öppnar i stället för att visa det blockerade formuläret.
             // Bara från skrivbordsläget — i dörren äger TV-appen sin egen inloggning.
-            if (currentMode === 'desktop') routeToSignInDoor(win);
+            if (currentMode === 'desktop' && !isSignedInCached(win)) routeToSignInDoor(win);
             return { action: 'deny' };
         }
         if (!isYouTube) {
@@ -272,9 +275,11 @@ function createWindow(profile) {
         if (input.key === 'F2') {
             // Inloggad: F2 är ett riktigt val, och det sparas. Utloggad: F2 är dörren
             // till QR-koden, och dörren rör inte användarens läge.
-            sessionOfWindow(win).cookies.get({ domain: '.youtube.com' })
+            sessionCookies(sessionOfWindow(win))
                 .then((cookies) => {
-                    if (isSignedIn(cookies)) switchMode(currentMode === 'tv' ? 'desktop' : 'tv', { persist: true });
+                    const signedIn = isSignedIn(cookies);
+                    noteSignInState(win, signedIn);
+                    if (signedIn) switchMode(currentMode === 'tv' ? 'desktop' : 'tv', { persist: true });
                     else switchMode('tv');
                 })
                 .catch(() => switchMode('tv'));
@@ -325,7 +330,7 @@ function createWindow(profile) {
     // men bara från skrivbordsläget. Mätt 2026-09-19: fångade vi även TV-appens egna
     // Google-steg rev vi inloggningen och släppte användaren tillbaka i TV-flödet.
     win.webContents.on('did-navigate', (_event, url) => {
-        if (currentMode === 'desktop' && isBlockedSignIn(url)) routeToSignInDoor(win);
+        if (currentMode === 'desktop' && !isSignedInCached(win) && isBlockedSignIn(url)) routeToSignInDoor(win);
     });
 
     win.on('app-command', (e, cmd) => {
@@ -366,9 +371,11 @@ function switchMode(newMode, { persist = false } = {}) {
 // "Get started", och ett Enter ger "Sign in with your phone — Scan QR code or go to
 // yt.be/activate — Enter the code GDM-STY-SDG".
 function startWithProfile(win, customSession) {
-    customSession.cookies.get({ domain: '.youtube.com' })
+    sessionCookies(customSession)
         .then((cookies) => {
             const plan = planForSession(cookies, currentMode);
+            noteSignInState(win, plan.signedIn);
+            console.log(`[OmarchyTube] Profilen öppnas: ${describeSession(cookies)} | ${plan.mode} | ${plan.signedIn ? 'inloggad' : 'utloggad'}`);
             if (plan.mode !== currentMode) applyMode(plan.mode);
             if (plan.signIn) {
                 openSignInDoor(win, customSession);
@@ -396,8 +403,11 @@ function startWithProfile(win, customSession) {
 // konto (SID) rörs ingenting, och en städad besökare kostar ingenting att bygga upp
 // igen.
 async function forgetVisitor(targetSession) {
-    const cookies = await targetSession.cookies.get({ domain: '.youtube.com' });
-    if (isSignedIn(cookies)) return false;
+    const cookies = await sessionCookies(targetSession);
+    if (isSignedIn(cookies)) {
+        console.log(`[OmarchyTube] Städar ingenting: ${describeSession(cookies)}.`);
+        return false;
+    }
 
     await Promise.all(cookies.map((cookie) =>
         targetSession.cookies.remove('https://www.youtube.com/', cookie.name).catch(() => {})));
@@ -448,6 +458,25 @@ function routeToSignInDoor(win) {
 
 const sessionOfWindow = (win) => session.fromPartition(partitionOfWindow(win));
 
+// Kakorna frågas fram UTAN domänfilter, och namnen loggas. Domänfiltret är en
+// gissning om var kakan ligger (domänen .youtube.com mot värden www.youtube.com),
+// och en felaktig gissning här betyder "utloggad" om kontot finns — då städar
+// dörren bort sessionen. Sanningen skall synas i loggen i stället.
+const sessionCookies = (targetSession) => targetSession.cookies.get({});
+
+function describeSession(cookies) {
+    const names = sessionCookieNames(cookies);
+    return names.length ? `konto: ${names.join(', ')}` : `konto: nej (${cookies.length} kakor, ingen sessionskaka)`;
+}
+
+// Vem som är inloggad, per ruta. Fångsten av Googles blockerade inloggningsväg får
+// bara gälla en ruta som INTE har ett konto — annars kastas en inloggad användare
+// tillbaka till TV-läget varje gång YouTubes sida rör en Google-adress (Alex
+// symptom 2026-09-19: "så fort man kör desktop kastas man tillbaka till TV").
+const signedInByContents = new Map();
+const noteSignInState = (win, signedIn) => { if (win && !win.isDestroyed()) signedInByContents.set(win.webContents.id, Boolean(signedIn)); };
+const isSignedInCached = (win) => Boolean(win && !win.isDestroyed() && signedInByContents.get(win.webContents.id));
+
 function partitionOfWindow(win) {
     const id = windowProfiles.get(win.webContents.id);
     return id ? partitionFor(id) : PICKER_PARTITION;
@@ -472,9 +501,10 @@ function watchForSignIn(win, customSession) {
             clearInterval(timer);
             return;
         }
-        customSession.cookies.get({ domain: '.youtube.com' })
+        sessionCookies(customSession)
             .then((cookies) => {
                 if (!isSignedIn(cookies)) return; // fortfarande utloggad
+                noteSignInState(win, true);
                 clearInterval(timer);
                 watchedWindows.delete(win.webContents.id);
                 if (win.isDestroyed()) return;
@@ -509,6 +539,22 @@ function openProfile(id) {
     const next = createWindow(profile);
     if (current && !current.isDestroyed()) current.close();
     return next;
+}
+
+// Kakburken skrivs till disk med flit. Appen startas om med pkill (SIGTERM), och
+// Chromium skriver sina kakor periodiskt — inte nödvändigtvis innan processen dör.
+// Utan det här kan en färsk inloggning försvinna med processen (Alex: "det verkar
+// inte sparas något på datorn").
+const sessionsToFlush = new Map();
+
+function flushSessions() {
+    for (const [key, targetSession] of sessionsToFlush) {
+        try {
+            targetSession.flushStorageData();
+        } catch (err) {
+            console.warn('[OmarchyTube] Kunde inte skriva', key, err.message);
+        }
+    }
 }
 
 function registerIpc() {
@@ -553,6 +599,8 @@ app.whenReady().then(() => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow(null);
     });
 });
+
+app.on('before-quit', flushSessions);
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

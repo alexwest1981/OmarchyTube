@@ -167,3 +167,61 @@ footer {
 #notice[hidden] {
     display: none;
 }
+
+/* Flikar och inloggning. Rutnätet är orört; detta är bara vägen in i det. */
+#tabs { display: flex; gap: 8px; margin-left: 24px; }
+#tabs button {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #2a2a30;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 15px;
+    cursor: pointer;
+}
+#tabs button:hover { background: var(--card-hover); }
+#tabs button.active { border-color: var(--accent); color: var(--accent); }
+#tabs #login-button { margin-left: auto; }
+
+#login {
+    margin: 28px;
+    padding: 24px;
+    max-width: 760px;
+    background: var(--card);
+    border: 1px solid #2a2a30;
+    border-radius: 12px;
+}
+#login h2 { margin: 0 0 12px; font-size: 22px; }
+#login p { color: var(--muted); line-height: 1.5; }
+#login label { display: block; margin: 14px 0; color: var(--muted); }
+#login input {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 10px 12px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid #3a3a42;
+    border-radius: 8px;
+    font-size: 15px;
+}
+#login button {
+    background: var(--accent);
+    color: #06110c;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+#login button + button { margin-left: 10px; background: var(--card-hover); color: var(--text); }
+#login-code {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin: 18px 0 0;
+}
+.card.channel .thumb { display: flex; align-items: center; justify-content: center; }
+.card.channel .thumb img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }

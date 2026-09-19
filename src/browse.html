@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="sv">
 <head>
     <meta charset="utf-8">
     <title>OmarchyTube</title>
@@ -8,20 +8,38 @@
 <body>
     <header>
         <h1>OmarchyTube</h1>
-        <input id="query" type="search" placeholder="Search YouTube — press /" autocomplete="off" spellcheck="false">
+        <nav id="tabs">
+            <button type="button" data-tab="recommended">Rekommenderat</button>
+            <button type="button" data-tab="latest">Senaste</button>
+            <button type="button" data-tab="subscriptions">Mina kanaler</button>
+            <button type="button" data-tab="search">Sök</button>
+            <button type="button" id="login-button">Logga in</button>
+        </nav>
+        <input id="query" type="search" placeholder="Sök på YouTube — tryck /" autocomplete="off" spellcheck="false">
         <span id="status"></span>
     </header>
     <p id="notice" hidden></p>
+
+    <section id="login" hidden>
+        <h2>Logga in på YouTube</h2>
+        <p>Skapa en OAuth-klient av typen <b>TVs and limited-input devices</b> i Google Cloud-konsolen och klistra in id och hemlighet här. Det görs en gång — sedan äger appen sin egen nyckel. Inga kakor, ingen webbläsare, ingen inloggning som kan loopa.</p>
+        <label>Klient-id <input id="client-id" placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false"></label>
+        <label>Klienthemlighet <input id="client-secret" placeholder="GOCSPX-…" autocomplete="off" spellcheck="false"></label>
+        <button type="button" id="save-client">Spara och hämta kod</button>
+        <button type="button" id="logout" hidden>Logga ut</button>
+        <p id="login-status"></p>
+        <p id="login-code" hidden></p>
+    </section>
+
     <main id="grid" tabindex="-1"></main>
     <footer>
-        <span>&larr; &rarr; &uarr; &darr; move</span>
-        <span>Enter play</span>
-        <span>/ search</span>
-        <span>Esc back to home feed</span>
-        <span>F1 YouTube TV</span>
-        <span>F2 desktop</span>
-        <span>F11 fullscreen</span>
+        <span>&larr; &rarr; &uarr; &darr; flytta</span>
+        <span>Enter spelar</span>
+        <span>/ sök</span>
+        <span>L logga in</span>
+        <span>F11 fullsk&auml;rm</span>
+        <span>Ctrl+Q avslutar</span>
     </footer>
-        <script src="browse.js"></script>
+    <script src="browse.js"></script>
 </body>
 </html>

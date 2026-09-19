@@ -19,14 +19,15 @@ const columns = () => getComputedStyle(grid).gridTemplateColumns.split(' ').filt
 function makeCard(item) {
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'card';
+    card.className = item.kind === 'channel' ? 'card channel' : 'card';
 
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
     if (item.thumbnail) {
         const img = document.createElement('img');
-        // 1280x720 i stället för träfflistans 720x404 (mätt 2026-09-19)
-        img.src = `https://i.ytimg.com/vi/${item.videoId}/hq720.jpg`;
+        // 1280x720 i stället för träfflistans 720x404 (mätt 2026-09-19).
+        // Kanaler har en avatar i stället för en miniatyr.
+        img.src = item.kind === 'channel' ? item.thumbnail : `https://i.ytimg.com/vi/${item.videoId}/hq720.jpg`;
         img.addEventListener('error', () => { img.src = item.thumbnail; });
         img.alt = '';
         img.loading = 'lazy';
@@ -77,7 +78,10 @@ function move(delta) {
 
 function play(index) {
     const item = state.items[index];
-    if (item) window.omarchyBridge.play(item.videoId);
+    if (!item) return;
+    // Ett kanalkort öppnar kanalen; ett videokort spelar.
+    if (item.kind === 'channel') return loadChannelVideos(item);
+    window.omarchyBridge.play(item.videoId);
 }
 
 // Mätt 2026-09-18: rutnätet stod på "Searching ..." och ingen — varken Alex
@@ -140,7 +144,11 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
         query.blur();
         query.value = '';
-        load('home');
+        if (!loginPanel.hidden) { loginPanel.hidden = true; event.preventDefault(); return; }
+        state.items = [];
+        render();
+        showNotice('');
+        status.textContent = '';
         event.preventDefault();
         return;
     }
@@ -161,9 +169,137 @@ document.addEventListener('keydown', (event) => {
         case 'Home': move(-state.items.length); break;
         case 'End': move(state.items.length); break;
         case 'Enter': play(state.index); break;
+        case 'l':
+        case 'L': openLogin(); break;
         default: return;
     }
     event.preventDefault();
 }, true);
 
-window.addEventListener('DOMContentLoaded', () => load('home'));
+window.addEventListener('DOMContentLoaded', start);
+
+// ---- flikar, feed och inloggning ------------------------------------------
+const tabs = document.getElementById('tabs');
+const loginPanel = document.getElementById('login');
+const loginStatusText = document.getElementById('login-status');
+const loginCode = document.getElementById('login-code');
+const logoutButton = document.getElementById('logout');
+let pollTimer = null;
+
+function showNotice(text) {
+    notice.hidden = !text;
+    notice.textContent = text || '';
+}
+
+function setTab(name) {
+    for (const button of tabs.querySelectorAll('button[data-tab]')) button.classList.toggle('active', button.dataset.tab === name);
+}
+
+// Flikarna som kräver ett konto säger ifrån i klartext i stället för att visa en
+// tom ruta — och öppnar inloggningen, som är enda vägen dit.
+async function feed(name) {
+    const label = { recommended: 'Rekommenderat', latest: 'Senaste från din feed', subscriptions: 'Mina kanaler' }[name] || name;
+    status.textContent = `Hämtar ${label}…`;
+    setTab(name);
+    try {
+        const items = await withTimeout(window.omarchyBridge.feed(name));
+        state.items = items;
+        state.index = 0;
+        render();
+        grid.focus();
+        showNotice(items.length ? '' : `${label} är tomt.`);
+        status.textContent = `${items.length} stycken`;
+    } catch (err) {
+        state.items = [];
+        render();
+        status.textContent = '';
+        showNotice(`Kunde inte hämta ${label.toLowerCase()}: ${err.message}`);
+        if (/inlogg|token|401|403/i.test(String(err.message))) openLogin();
+    }
+}
+
+async function loadChannelVideos(item) {
+    status.textContent = `Hämtar ${item.title}…`;
+    try {
+        const items = await withTimeout(window.omarchyBridge.channelVideos(item.channelId));
+        state.items = items;
+        state.index = 0;
+        render();
+        grid.focus();
+        showNotice(`${item.title}: ${items.length} videor. Esc rensar.`);
+        status.textContent = `${items.length} videor`;
+    } catch (err) {
+        showNotice(`Kunde inte hämta kanalen: ${err.message}`);
+    }
+}
+
+function openLogin() {
+    loginPanel.hidden = false;
+    if (!loginStatusText.textContent) loginStatusText.textContent = 'Klistra in klient-id och hemlighet. Sedan visas en kod du bekräftar på mobilen eller i en webbläsare.';
+    document.getElementById('client-id').focus();
+}
+
+function showCode(started) {
+    loginCode.hidden = false;
+    loginCode.textContent = started.userCode;
+    loginStatusText.textContent = `Öppna ${started.url} och skriv in koden ovan. Appen väntar.`;
+    clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+        try {
+            const result = await window.omarchyBridge.loginStatus();
+            if (result.state === 'väntar') return;
+            clearInterval(pollTimer);
+            if (result.state === 'klar') {
+                loginPanel.hidden = true;
+                loginCode.hidden = true;
+                logoutButton.hidden = false;
+                showNotice('Inloggad.');
+                feed('latest');
+            } else {
+                loginStatusText.textContent = `Inloggningen: ${result.state}${result.message ? ' — ' + result.message : ''}`;
+            }
+        } catch (err) {
+            clearInterval(pollTimer);
+            loginStatusText.textContent = `Fel: ${err.message}`;
+        }
+    }, 2000);
+}
+
+async function start() {
+    const account = await window.omarchyBridge.account().catch(() => ({ signedIn: false }));
+    logoutButton.hidden = !account.signedIn;
+    if (account.signedIn) {
+        setTab('recommended');
+        feed('recommended');
+    } else {
+        setTab('search');
+        openLogin();
+        showNotice('Sök fungerar utan konto. För din lista, din feed och rekommendationerna: logga in nedan.');
+    }
+}
+
+tabs.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    if (button.id === 'login-button') { openLogin(); return; }
+    if (button.dataset.tab === 'search') { setTab('search'); query.focus(); return; }
+    if (button.dataset.tab) feed(button.dataset.tab);
+});
+
+document.getElementById('save-client').addEventListener('click', async () => {
+    const id = document.getElementById('client-id').value.trim();
+    const secret = document.getElementById('client-secret').value.trim();
+    if (!id || !secret) { loginStatusText.textContent = 'Både klient-id och hemlighet behövs.'; return; }
+    try {
+        await window.omarchyBridge.saveClient(id, secret);
+        showCode(await window.omarchyBridge.startLogin());
+    } catch (err) {
+        loginStatusText.textContent = `Google svarade: ${err.message}`;
+    }
+});
+
+logoutButton.addEventListener('click', async () => {
+    await window.omarchyBridge.loggedOut();
+    logoutButton.hidden = true;
+    openLogin();
+});

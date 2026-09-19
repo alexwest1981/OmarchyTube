@@ -9,6 +9,7 @@
 // utan konto — därför är sökning appens ingång.
 const { net } = require('electron');
 const { extractItems } = require('./innertube-extract');
+const { signedIn, accessToken } = require('./auth');
 
 // Nyckeln youtube.com själv skickar till sina egna sidor via ytcfg. Ingen
 // hemlighet, inte knuten till något konto.
@@ -27,11 +28,18 @@ const CONTEXT = {
 // mätt 2026-09-19 (mq 320x180, hq 480x360, sd 640x480, hq720 1280x720).
 const thumbUrl = (videoId) => `https://i.ytimg.com/vi/${videoId}/hq720.jpg`;
 
+// Är du inloggad följer din access-token med. Det är den som gör flödet
+// personligt — utan den svarar YouTube 400 eller tomt (mätt 2026-09-19).
+async function headers() {
+    const base = { 'Content-Type': 'application/json' };
+    return signedIn() ? { ...base, Authorization: `Bearer ${await accessToken()}` } : base;
+}
+
 async function post(endpoint, body) {
     const url = `https://www.youtube.com/youtubei/v1/${endpoint}?key=${API_KEY}&prettyPrint=false`;
     const response = await net.fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await headers(),
         body: JSON.stringify({ context: CONTEXT, ...body }),
     });
     if (!response.ok) throw new Error(`${endpoint} svarade ${response.status}`);
@@ -54,4 +62,8 @@ async function run(what, endpoint, body) {
 
 const search = (query) => run(`sök "${query}"`, 'search', { query });
 
-module.exports = { search, thumbUrl, API_KEY, CONTEXT };
+// YouTubes egna rekommendationsflöde. Det kräver ett konto — utan token svarar
+// YouTube tomt, och då säger appen det i stället för att visa en tom ruta.
+const recommended = () => run('rekommenderat', 'browse', { browseId: 'FEwhat_to_watch' });
+
+module.exports = { search, recommended, thumbUrl, API_KEY, CONTEXT };

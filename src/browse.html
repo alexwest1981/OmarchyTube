@@ -31,9 +31,18 @@
     </section>
 
     <main id="grid" tabindex="-1"></main>
+
+    <!-- Spelaren bor i appens fönster (aldrig ett eget fönster). Esc stänger. -->
+    <div id="spelare" hidden>
+        <video id="video" controls autoplay playsinline></video>
+        <div id="film-titel"></div>
+        <div id="film-vantar">Hämtar strömmen …</div>
+        <div class="spel-hint">Esc st&auml;nger &middot; mellanslag pausar</div>
+    </div>
     <footer>
         <span>&larr; &rarr; &uarr; &darr; flytta</span>
         <span>Enter spelar</span>
+        <span>H h&ouml;g kvalitet</span>
         <span>/ sök</span>
         <span>L sessionen</span>
         <span>F11 fullsk&auml;rm</span>

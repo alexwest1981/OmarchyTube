@@ -78,7 +78,7 @@ function markSelected() {
 }
 
 function move(delta) {
-    if (!state.items.length) return;
+    if (!state.items.length || spelarenÖppen()) return;
     const next = Math.min(Math.max(state.index + delta, 0), state.items.length - 1);
     if (next !== state.index) {
         state.index = next;
@@ -86,12 +86,48 @@ function move(delta) {
     }
 }
 
-function play(index) {
+// Spelaren bor i appens fönster. Esc stänger den — mätt 2026-09-20: ett eget
+// spelarfönster (mpv) lade sig över rutnätet och gick inte att stänga.
+async function play(index) {
     const item = state.items[index];
     if (!item) return;
     // Ett kanalkort öppnar kanalen; ett videokort spelar.
     if (item.kind === 'channel') return loadChannelVideos(item);
-    window.omarchyBridge.play(item.videoId);
+    const spelare = document.getElementById('spelare');
+    const video = document.getElementById('video');
+    document.getElementById('film-titel').textContent = item.title || '';
+    document.getElementById('film-vantar').hidden = false;
+    spelare.hidden = false;
+    video.removeAttribute('src');   // inget gammalt får fortsätta låta
+    video.load();
+    try {
+        const svar = await window.omarchyBridge.play(item.videoId);
+        video.src = svar.url;
+        document.getElementById('film-vantar').hidden = true;
+        await video.play().catch(() => {});
+    } catch (err) {
+        showNotice(`Kunde inte spela: ${err.message}`);
+        stängSpelaren();
+    }
+}
+
+function playHigh(item) {
+    if (!item || !item.videoId) return;
+    window.omarchyBridge.playHigh(item.videoId);
+    showNotice('Hög kvalitet i mpv — Esc i mpv-fönstret stänger det.');
+}
+
+function stängSpelaren() {
+    const video = document.getElementById('video');
+    if (!video) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    document.getElementById('spelare').hidden = true;
+}
+
+function spelarenÖppen() {
+    return !document.getElementById('spelare').hidden;
 }
 
 // Mätt 2026-09-18: rutnätet stod på "Searching ..." och ingen — varken Alex
@@ -180,6 +216,17 @@ document.addEventListener('keydown', (event) => {
         case 'End': move(state.items.length); break;
         case 'Enter': play(state.index); break;
         case 'l':
+        case 'h':
+        case 'H':
+            // Hög kvalitet: mpv (eget fönster). Standard är alltid i appen.
+            if (state.items.length && !spelarenÖppen()) playHigh(state.items[state.index]);
+            break;
+        case 'Escape':
+            stängSpelaren();
+            // Inloggningsläget får aldrig gå att fastna i (mätt 2026-09-20).
+            document.body.classList.remove('signing-in');
+            loginPanel.hidden = true;
+            break;
         case 'L': openLogin(); break;
         default: return;
     }
@@ -230,6 +277,8 @@ async function feed(name) {
 // Panelen är information, inte en uppgift: appen hämtar sin session själv.
 // Att visa den (L, eller vid start utan konto) ber bara huvudet öppna dörren.
 function openLogin() {
+    // Har vi videor på skärmen får en inloggningsruta aldrig täcka dem.
+    if (state.items.length) return;
     document.body.classList.add('signing-in');
     loginPanel.hidden = false;
     if (window.omarchyBridge.note) window.omarchyBridge.note('visar inloggningen (ingen session än)');

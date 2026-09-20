@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('omarchyBridge', {
     note: (text) => ipcRenderer.invoke('note', text),
     openLogin: () => ipcRenderer.invoke('openLogin'),
     play: (videoId) => ipcRenderer.invoke('play', videoId),
+    playHigh: (videoId) => ipcRenderer.invoke('playHigh', videoId),
 });

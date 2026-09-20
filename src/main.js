@@ -31,7 +31,7 @@ for (const level of ['log', 'error']) {
     };
 }
 const { search, recommended, recommendedWithAnyClient, candidatesFrom, subscriptionsFeed, storeToken, storeSession, storedSession } = require('./innertube');
-const { play, stop } = require('./player');
+const { play, playHigh } = require('./player');
 const account = require('./account');
 
 const PARTITION = account.PARTITION;
@@ -77,7 +77,7 @@ function createWindow() {
             app.quit();
         }
     });
-    win.on('closed', () => { stop(); win = null; });
+    win.on('closed', () => { win = null; });
 }
 
 ipcMain.handle('search', (_event, query) => search(String(query || '').trim()));
@@ -128,9 +128,17 @@ ipcMain.handle('openLogin', () => {
     return { opened: true };
 });
 
-ipcMain.handle('play', (_event, videoId) => {
+// Hög kvalitet (mpv) — bara när sidan själv ber om det.
+ipcMain.handle('playHigh', (_event, videoId) => {
     if (!/^[\w-]{11}$/.test(String(videoId || ''))) throw new Error(`ogiltigt video-id: ${videoId}`);
-    return { pid: play(videoId) };
+    playHigh(videoId);
+    return { started: true };
+});
+
+ipcMain.handle('play', async (_event, videoId) => {
+    if (!/^[\w-]{11}$/.test(String(videoId || ''))) throw new Error(`ogiltigt video-id: ${videoId}`);
+    // Strömmen spelas i appens eget fönster, inte i en extern spelare.
+    return { url: await play(videoId) };
 });
 
 // En instans: två samtidiga appfönster delar partition och skriver över varandra.
@@ -144,10 +152,9 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.whenReady().then(createWindow);
-app.on('window-all-closed', () => { stop(); app.quit(); });
+app.on('window-all-closed', () => app.quit());
 // Sessionen skall till disk innan appen dör, annars börjar nästa start om.
 app.on('before-quit', (event) => {
-    stop();
     if (flushed) return;
     event.preventDefault();
     flushed = true;

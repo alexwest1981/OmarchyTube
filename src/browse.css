@@ -341,3 +341,44 @@ header h1::before {
 }
 .channel { font-size: 13px; color: var(--muted); }
 #grid { gap: 18px 14px; padding-bottom: 18px; }
+
+/* Spelaren: helskärm i appens fönster, ovanpå allt utom ingenting. */
+#spelare {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#spelare[hidden] { display: none; }
+#spelare video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+#film-titel {
+    position: absolute;
+    top: 18px;
+    left: 24px;
+    right: 24px;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+}
+.spel-hint {
+    position: absolute;
+    bottom: 16px;
+    right: 24px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+#film-vantar {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 20px;
+    color: var(--muted);
+}
+#film-vantar[hidden] { display: none; }

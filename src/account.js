@@ -55,28 +55,6 @@ const LES_KODEN = `(function () {
 // TV-appen visar sin inloggning bakom en "Sign in"-knapp. Att trycka på sidans
 // EGEN knapp är att använda flödet, inte att ändra sidan — och det är precis vad
 // en människa hade gjort i det synliga fönstret.
-const TRYCK_VIDARE = `(function () {
-    var kandidater = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'));
-    var mönster = /(get started|sign in|logga in|continue|fortsätt|next|nästa|börja|start)/i;
-    var knapp = kandidater.filter(function (el) {
-        var t = (el.textContent || '').trim();
-        return t && t.length < 40 && mönster.test(t);
-    })[0];
-    if (!knapp) return null;
-    var namn = (knapp.textContent || '').trim().slice(0, 24);
-    knapp.click();
-    return namn;
-})()`;
-
-const TRYCK_KONTO = `(function () {
-    var kandidater = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'));
-    var konto = kandidater.filter(function (el) { return /@/.test((el.textContent || '')); })[0];
-    if (!konto) return null;
-    var namn = (konto.textContent || '').trim().split('\n')[0].slice(0, 30);
-    konto.click();
-    return namn;
-})()`;
-
 const markersIn = (cookies) => [...new Set((cookies || []).map((c) => c.name).filter((name) => MARKERS.includes(name)))].sort();
 
 // Frågar ALLA kakor, utan domänfilter: filtret var det som gömde kontot.
@@ -272,21 +250,16 @@ async function loginInfo() {
     // val. Ett försök per ny skärm, högst fyra, och varje steg hamnar i loggen.
     if (!code && tryckta.length < 4 && skarm !== senasteSkarmForra) {
         senasteSkarmForra = skarm;
-        const valt = await current.webContents.executeJavaScript(TRYCK_KONTO).catch(() => null);
-        const knapp = valt ? null : await current.webContents.executeJavaScript(TRYCK_VIDARE).catch(() => null);
-        if (valt) {
-            tryckta.push(`konto: ${valt}`);
-            console.log(`[OmarchyTube] valde kontot "${valt}" (steg ${tryckta.length})`);
-        } else if (knapp && !tryckta.includes(knapp)) {
-            tryckta.push(knapp);
-            console.log(`[OmarchyTube] klickade "${knapp}" (steg ${tryckta.length})`);
-        } else {
-            for (const typ of ['keyDown', 'char', 'keyUp']) {
-                await current.webContents.sendInputEvent({ type: typ, keyCode: typ === 'char' ? '\r' : 'Return' });
-            }
-            tryckta.push(`Enter på "${läst.titel || '?'}"`);
-            console.log(`[OmarchyTube] skickade Enter till inloggningsskärmen (steg ${tryckta.length})`);
+        // MÄTT 2026-09-20, två skärmar: ett riktigt Enter tar TV-appen från
+        // "Get started" (färsk maskin) till kodskärmen "KBN-HFP-ZGFW — Scan QR
+        // code or go to yt.be/activate", och från kontoväljaren in i TV-appen.
+        // Ett syntetiskt .click() från kod GÖR INGENTING på samma knapp (mätt) —
+        // därför skickas Enter som en riktig tangent, inte som ett klick.
+        for (const typ of ['keyDown', 'char', 'keyUp']) {
+            await current.webContents.sendInputEvent({ type: typ, keyCode: typ === 'char' ? '\r' : 'Return' });
         }
+        tryckta.push(`Enter på "${läst.titel || '?'}"`);
+        console.log(`[OmarchyTube] skickade Enter (steg ${tryckta.length})`);
     }
     if (!code && bildfel < 3 && Date.now() - senasteBild > 3000) {
         senasteBild = Date.now();

@@ -220,7 +220,9 @@ async function feed(name) {
 // Panelen är information, inte en uppgift: appen hämtar sin session själv.
 // Att visa den (L, eller vid start utan konto) ber bara huvudet öppna dörren.
 function openLogin() {
+    document.body.classList.add('signing-in');
     loginPanel.hidden = false;
+    if (window.omarchyBridge.note) window.omarchyBridge.note('visar inloggningen (ingen session än)');
     if (!loginStatusText.textContent) loginStatusText.textContent = 'Hämtar din TV-session — inget behöver göras';
     loginStatusText.focus();
 }
@@ -246,7 +248,9 @@ function watchForLogin() {
         const account = await window.omarchyBridge.account().catch(() => ({ signedIn: false }));
         if (account.signedIn) {
             clearInterval(loginTimer);
+            document.body.classList.remove('signing-in');
             loginPanel.hidden = true;
+            if (window.omarchyBridge.note) window.omarchyBridge.note('inloggad — laddar Rekommenderat');
             showNotice(`Inloggad (${account.markers.join(', ')}).`);
             feed('recommended');
         }
@@ -255,6 +259,7 @@ function watchForLogin() {
 
 async function start() {
     const account = await window.omarchyBridge.account().catch(() => ({ signedIn: false }));
+    if (window.omarchyBridge.note) window.omarchyBridge.note(account.signedIn ? 'start: inloggad, laddar flödet' : 'start: ingen session än');
     if (account.signedIn) {
         setTab('recommended');
         feed('recommended');
@@ -270,7 +275,6 @@ async function start() {
 tabs.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button) return;
-    if (button.id === 'login-button') { openLogin(); return; }
     if (button.dataset.tab === 'search') { setTab('search'); query.focus(); return; }
     if (button.dataset.tab) feed(button.dataset.tab);
 });

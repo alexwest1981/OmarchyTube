@@ -32,6 +32,29 @@ test('appens session har ett eget hem, och partitionen är den inloggade', () =>
     assert.match(read('main.js'), /requestSingleInstanceLock/, 'två instanser delar partition och skriver över varandra');
 });
 
+// Mätt 2026-09-20: TV-sessionen sätter inga markörkakor, så "är vi inloggade?"
+// svarade nej medan flödet svarade med 12 videor — panelen låg kvar över rutnätet
+// och videorna kom bara om man klickade på fliken själv. Samma misstag som
+// "vänta på ett kaknamn", på ett nytt ställe.
+test('inloggad avgörs av sessionen, inte av kaknamn', () => {
+    const main = read('main.js');
+    assert.match(main, /ipcMain\.handle\('account',[\s\S]{0,300}?storedSession\(\)/, 'account skall svara ur den sparade sessionen');
+    assert.ok(!/ipcMain\.handle\('account', \(\) => account\.accountState/.test(main), 'kakmarkörer får inte avgöra inloggningen');
+});
+
+test('inloggningen är ett helskärmsläge, inte en ruta ovanpå rutnätet', () => {
+    const css = read('browse.css');
+    assert.match(css, /#login \{[\s\S]{0,200}?position: fixed/, 'panelen skall täcka fönstret');
+    assert.match(read('browse.js'), /classList\.add\('signing-in'\)/, 'rutnätet skall vika undan medan man loggar in');
+    assert.match(css, /#login \.kod \{[\s\S]{0,160}?clamp\(/, 'koden skall vara stor nog att läsas på håll');
+});
+
+test('Enter skickas som en riktig tangent — syntetiska klick gör ingenting', () => {
+    const account = read('account.js');
+    assert.match(account, /sendInputEvent\(\{ type: typ, keyCode: typ === 'char'/, 'Enter skall skickas som inmatning');
+    assert.ok(!/TRYCK_KONTO|TRYCK_VIDARE/.test(account), 'klick-vägen är mätt död och skall inte tillbaka');
+});
+
 test('flushStorageData anropas utan .catch — den är synkron och kastar annars', () => {
     const src = all();
     assert.ok(!/flushStorageData\(\)\s*\n?\s*\.catch/.test(src), 'flushStorageData().catch(...) kastar: den returnerar ingenting');

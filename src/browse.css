@@ -184,12 +184,25 @@ footer {
 #tabs #login-button { margin-left: auto; }
 
 #login {
-    margin: 28px;
-    padding: 24px;
-    max-width: 760px;
-    background: var(--card);
-    border: 1px solid #2a2a30;
-    border-radius: 12px;
+    /* Helskärm: inloggningen är ett LÄGE, inte en ruta som ligger över rutnätet
+       (mätt 2026-09-20 — panelen följde med överallt och rutnätet syntes bakom). */
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    z-index: 5;
+    overflow: auto;
+}
+#login .signin { text-align: center; padding: 24px; max-width: 1000px; }
+#login h1 { margin: 0 0 6px; font-size: 30px; }
+#login .steg { color: var(--muted); font-size: 19px; margin: 10px 0; }
+#login .kod {
+    font-size: clamp(34px, 6vw, 76px);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    margin: 6px 0 14px;
 }
 #login h2 { margin: 0 0 12px; font-size: 22px; }
 #login p { color: var(--muted); line-height: 1.5; }
@@ -234,12 +247,11 @@ footer {
     margin: 18px 0 6px;
 }
 #login-qr {
-    max-width: 520px;
-    height: auto;
-    background: #fff;
-    border-radius: 10px;
-    padding: 10px;
-    margin: 6px 0 12px;
     display: block;
+    margin: 14px auto 0;
+    max-width: min(560px, 58vh);
+    height: auto;
+    border: 1px solid #2a2a30;
+    border-radius: 12px;
 }
 #login .hint { color: var(--muted); font-size: 14px; }

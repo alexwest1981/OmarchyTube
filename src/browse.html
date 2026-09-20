@@ -13,7 +13,6 @@
             <button type="button" data-tab="latest">Senaste</button>
             <button type="button" data-tab="subscriptions">Mina kanaler</button>
             <button type="button" data-tab="search">Sök</button>
-            <button type="button" id="login-button">Logga in</button>
         </nav>
         <input id="query" type="search" placeholder="Sök på YouTube — tryck /" autocomplete="off" spellcheck="false">
         <span id="status"></span>
@@ -21,11 +20,14 @@
     <p id="notice" hidden></p>
 
     <section id="login" hidden>
-        <h2>Logga in</h2>
-        <p id="login-status">Startar inloggningen …</p>
-        <p id="login-code" hidden></p>
-        <img id="login-qr" alt="" hidden>
-        <p class="hint">Inget behöver göras: appen hämtar sessionen från din TV-app av sig själv. Dyker inget upp står skälet i loggen.</p>
+        <div class="signin">
+            <h1>Logga in på YouTube</h1>
+            <p class="steg">1. &Ouml;ppna <b>yt.be/activate</b> p&aring; din telefon</p>
+            <p id="login-code" class="kod" hidden></p>
+            <p class="steg">2. Skriv koden ovan &mdash; eller skanna bilden</p>
+            <img id="login-qr" alt="Skanna med telefonen">
+            <p id="login-status" class="hint">H&auml;mtar din TV-session &hellip;</p>
+        </div>
     </section>
 
     <main id="grid" tabindex="-1"></main>

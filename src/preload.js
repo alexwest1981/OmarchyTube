@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('omarchyBridge', {
     feed: (kind) => ipcRenderer.invoke('feed', kind),
     account: () => ipcRenderer.invoke('account'),
     loginInfo: () => ipcRenderer.invoke('loginInfo'),
+    // Renderarens egna beslut hamnar i loggfilen: annars syns de bara i devtools.
+    note: (text) => ipcRenderer.invoke('note', text),
     openLogin: () => ipcRenderer.invoke('openLogin'),
     play: (videoId) => ipcRenderer.invoke('play', videoId),
 });

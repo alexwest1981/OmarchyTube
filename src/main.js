@@ -88,7 +88,17 @@ ipcMain.handle('feed', async (_event, kind) => {
     throw new Error(`okänd flik: ${kind}`);
 });
 
-ipcMain.handle('account', () => account.accountState());
+// "Är vi inloggade?" besvaras av den sparade sessionen — inte av kaknamn.
+// MÄTT 2026-09-20: TV-sessionen sätter inga markörkakor alls, så den gamla
+// kontrollen svarade nej medan flödet svarade med 12 videor. Rutnätet visade
+// inloggningsrutan och videorna kom bara om man klickade på fliken själv.
+// Sessionen skrivs till disk först efter att flödet svarat, så filen ÄR provet.
+ipcMain.handle('note', (_e, text) => { console.log(`[OmarchyTube] sidan: ${String(text).slice(0, 200)}`); });
+
+ipcMain.handle('account', () => {
+    const session = storedSession();
+    return { signedIn: Boolean(session), markers: session ? ['TV-session'] : [], total: 0 };
+});
 
 // Koden och QR-bilden till appens egen panel.
 ipcMain.handle('loginInfo', () => account.loginInfo());

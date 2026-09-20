@@ -249,6 +249,7 @@ let tryckta = [];
 let senasteSkarm = null;
 let senasteSkarmForra = null;
 let senasteBild = 0;
+let bildfel = 0;
 
 // Koden ligger i en cross-origin-ram (mätt: hela sidans text är 330 tecken, ingen
 // kod i den). Därför fotograferas den dolda sidan i stället — mätt 2026-09-19:
@@ -287,7 +288,7 @@ async function loginInfo() {
             console.log(`[OmarchyTube] skickade Enter till inloggningsskärmen (steg ${tryckta.length})`);
         }
     }
-    if (!code && Date.now() - senasteBild > 3000) {
+    if (!code && bildfel < 3 && Date.now() - senasteBild > 3000) {
         senasteBild = Date.now();
         try {
             const bild = await current.webContents.capturePage();
@@ -297,7 +298,11 @@ async function loginInfo() {
                 console.log(`[OmarchyTube] inloggningsrutan fotograferad: ${width}x${height}, ${Math.round(bild.toPNG().length / 1024)} kB`);
             }
         } catch (err) {
-            console.error(`[OmarchyTube] kunde inte fotografera inloggningen: ${err.message}`);
+            // En dold ruta kan vägra lämna ifrån sig en bild (UnknownVizError).
+            // Efter tre försök är svaret givet — då tiger vi i stället för att
+            // fylla loggen (mätt i Alex körning 2026-09-20).
+            bildfel += 1;
+            if (bildfel === 1) console.log(`[OmarchyTube] kunde inte fotografera inloggningen: ${err.message}`);
         }
     }
     if (code) console.log(`[OmarchyTube] koden läst ur sidan: ${code}`);

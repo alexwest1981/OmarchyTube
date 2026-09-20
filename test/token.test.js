@@ -29,13 +29,14 @@ const innertube = require(path.join(__dirname, '..', 'src', 'innertube.js'));
 Module._load = original;
 
 test('nyckeln sparas läsbar bara för ägaren', () => {
-    innertube.storeToken('hemlig-nyckel-1234567890');
+    innertube.storeSession({ token: 'hemlig-nyckel-1234567890', context: { client: { clientName: 'TVHTML5' } } });
     assert.strictEqual(innertube.storedToken(), 'hemlig-nyckel-1234567890');
     const file = path.join(tmp, 'omarchy-tube', 'session.json');
     assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
 });
 
 test('nyckeln följer med som Bearer — både den givna och den sparade', async () => {
+    innertube.storeSession({ token: 'hemlig-nyckel-1234567890', context: { client: { clientName: 'TVHTML5' } } });
     requests.length = 0;
     await innertube.recommendedWith('prov-nyckel-1234567890');
     assert.strictEqual(requests[0].options.headers.Authorization, 'Bearer prov-nyckel-1234567890');
@@ -132,4 +133,11 @@ test('en avvisad nyckel kastas, så att appen fångar en ny (annars fungerar det
         console.error = console.error;   // (loggen skall få skriva, vi städar bara statusen)
     }
     assert.strictEqual(innertube.storedSession(), null, 'den utgångna nyckeln ligger kvar — då fastnar appen i tomt flöde');
+});
+
+test('en halv session (nyckel utan klientkontext) räknas inte som inloggad', () => {
+    innertube.storeSession({ token: 'nyckel-utan-kontext-1234567890' });
+    assert.strictEqual(innertube.storedSession(), null, 'en nyckel utan kontext gav 400 — den får inte användas');
+    innertube.storeSession({ token: 'hel-nyckel-1234567890', context: { client: { clientName: 'TVHTML5' } } });
+    assert.ok(innertube.storedSession(), 'en hel session skall användas');
 });

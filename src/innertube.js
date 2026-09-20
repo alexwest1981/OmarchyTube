@@ -41,7 +41,10 @@ const sessionFile = () => path.join(process.env.XDG_CONFIG_HOME || path.join(req
 function storedSession() {
     try {
         const data = JSON.parse(fs.readFileSync(sessionFile(), 'utf8'));
-        return data && data.token ? data : null;
+        // En nyckel UTAN klientkontext gav 400 (mätt 2026-09-20: den gamla
+        // gissningsvägen skrev en sådan fil). En halv session är ingen session —
+        // då öppnar appen dörren och fångar en hel i stället.
+        return data && data.token && data.context ? data : null;
     } catch { return null; }
 }
 function storedToken() {

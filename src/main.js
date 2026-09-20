@@ -103,20 +103,9 @@ ipcMain.handle('openLogin', () => {
         // Hittar dörren något som liknar en nyckel i TV-appens lagring provas den
         // mot YouTube. Fungerar den sparas den — och loggen nämner bara NAMNET,
         // aldrig nyckeln (den är kontots).
-        onStorage: async (par) => {
-            for (const [namn, varde] of par) {
-                if (typeof varde !== 'string') continue;
-                for (const kandidat of candidatesFrom(varde).slice(0, 4)) {
-                    const { items, clientName } = await recommendedWithAnyClient(kandidat);
-                    console.log(`[OmarchyTube] provar "${namn}" (${kandidat.length} tecken): ${items.length} videor${clientName ? ` via ${clientName}` : ''}`);
-                    if (items.length) {
-                        storeToken(kandidat);
-                        console.log(`[OmarchyTube] sessionen hittad i "${namn}" och sparad — appen är inloggad`);
-                        return;
-                    }
-                }
-            }
-        },
+        // Lagringens NAMN loggas (dörren gör det), men nycklarna i den provas inte
+        // längre: de gav 400 utan klientkontext och skrev halva sessioner till
+        // disk (mätt 2026-09-20). Dörrens eget anrop är den enda vägen in.
         // Nyckeln dörren fångade ur sitt eget anrop: den skrivs till disk (0600)
         // och bevisas med ett riktigt anrop innan appen kallar sig inloggad.
         onSession: async (data) => {

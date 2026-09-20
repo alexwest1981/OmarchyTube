@@ -44,9 +44,10 @@ test('inloggad avgörs av sessionen, inte av kaknamn', () => {
 
 test('inloggningen är ett helskärmsläge, inte en ruta ovanpå rutnätet', () => {
     const css = read('browse.css');
-    assert.match(css, /#login \{[\s\S]{0,200}?position: fixed/, 'panelen skall täcka fönstret');
+    assert.match(css, /#login:not\(\[hidden\]\) \{[\s\S]{0,200}?position: fixed/, 'panelen skall täcka fönstret — men bara när den inte är dold (display slår hidden-attributet)');
+    assert.match(css, /#login-qr\[hidden\] \{ display: none/, 'den dolda QR-bilden fick en trasig bild-ikon i stället för att vara borta');
     assert.match(read('browse.js'), /classList\.add\('signing-in'\)/, 'rutnätet skall vika undan medan man loggar in');
-    assert.match(css, /#login \.kod \{[\s\S]{0,160}?clamp\(/, 'koden skall vara stor nog att läsas på håll');
+    assert.match(css, /#login:not\(\[hidden\]\) \.kod \{[\s\S]{0,160}?clamp\(/, 'koden skall vara stor nog att läsas på håll');
 });
 
 test('Enter skickas som en riktig tangent — syntetiska klick gör ingenting', () => {

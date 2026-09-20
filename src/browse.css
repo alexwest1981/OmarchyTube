@@ -183,7 +183,7 @@ footer {
 #tabs button.active { border-color: var(--accent); color: var(--accent); }
 #tabs #login-button { margin-left: auto; }
 
-#login {
+#login:not([hidden]) {
     /* Helskärm: inloggningen är ett LÄGE, inte en ruta som ligger över rutnätet
        (mätt 2026-09-20 — panelen följde med överallt och rutnätet syntes bakom). */
     position: fixed;
@@ -194,10 +194,10 @@ footer {
     z-index: 5;
     overflow: auto;
 }
-#login .signin { text-align: center; padding: 24px; max-width: 1000px; }
-#login h1 { margin: 0 0 6px; font-size: 30px; }
-#login .steg { color: var(--muted); font-size: 19px; margin: 10px 0; }
-#login .kod {
+#login:not([hidden]) .signin { text-align: center; padding: 24px; max-width: 1000px; }
+#login:not([hidden]) h1 { margin: 0 0 6px; font-size: 30px; }
+#login:not([hidden]) .steg { color: var(--muted); font-size: 19px; margin: 10px 0; }
+#login:not([hidden]) .kod {
     font-size: clamp(34px, 6vw, 76px);
     font-weight: 700;
     letter-spacing: 0.16em;
@@ -246,6 +246,7 @@ footer {
     color: var(--accent);
     margin: 18px 0 6px;
 }
+#login-qr[hidden] { display: none; }
 #login-qr {
     display: block;
     margin: 14px auto 0;

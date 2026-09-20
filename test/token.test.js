@@ -108,6 +108,11 @@ test('TV-flödets poster hittas (id:t ett steg ned, titeln i metadata)', () => {
     assert.strictEqual(poster.length, 1, `hittade ${poster.length} poster`);
     assert.strictEqual(poster[0].videoId.length, 11, 'fel video-id');
     assert.ok(poster[0].title.length > 5, 'titeln saknas');
+    assert.ok(poster[0].channel, `kanalen saknas: ${JSON.stringify(poster[0])}`);
+    assert.match(poster[0].views, /views/i, 'visningarna saknas');
+    assert.match(poster[0].age, /ago/i, 'åldern saknas');
+    assert.match(poster[0].duration, /^\d+:\d\d/, 'längden saknas');
+    assert.ok(poster[0].thumbnail.startsWith('https://'), 'miniatyren saknas');
 });
 
 test('sökningen är kontofri — TV-sessionen gäller bara flödena', async () => {

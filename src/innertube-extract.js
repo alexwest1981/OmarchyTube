@@ -19,6 +19,33 @@ function videoIdOf(node) {
     return typeof vakt.videoId === 'string' ? vakt.videoId : null;
 }
 
+// TV-appens post bär allt rutnätet vill visa, i sin egen form (mätt 2026-09-20 på
+// ett riktigt svar): titeln i metadata.tileMetadataRenderer.title, kanalen i
+// lines[0], visningar/ålder i lines[1] ("97K views" • "17 hours ago"), längden i
+// header.tileHeaderRenderer.thumbnailOverlays och miniatyren i samma header.
+// Utan det här blev korten svarta med tom underrad.
+function tileOf(node) {
+    const meta = node.metadata && node.metadata.tileMetadataRenderer;
+    const header = node.header && node.header.tileHeaderRenderer;
+    if (!meta && !header) return null;
+    const rader = ((meta && meta.lines) || []).map((rad) => {
+        const items = (rad.lineRenderer && rad.lineRenderer.items) || [];
+        return items.map((i) => textOf(i.lineItemRenderer && i.lineItemRenderer.text)).filter(Boolean);
+    });
+    const överlägg = ((header && header.thumbnailOverlays) || [])
+        .map((o) => o.thumbnailOverlayTimeStatusRenderer)
+        .filter(Boolean)[0];
+    const underrad = (rader[1] || []).filter((t) => t !== '•');
+    return {
+        title: textOf(meta && meta.title),
+        channel: (rader[0] || [])[0] || '',
+        views: underrad[0] || '',
+        age: underrad[1] || '',
+        duration: textOf(överlägg && överlägg.text),
+        thumbnail: thumbnailOf(header || node),
+    };
+}
+
 function titleOf(node) {
     return textOf(node.title)
         || textOf(node.headline)
@@ -57,15 +84,18 @@ function extractItems(payload) {
         }
         const id = videoIdOf(node);
         if (typeof id === 'string' && /^[\w-]{11}$/.test(id) && !seen.has(id)) {
-            const title = titleOf(node);
+            const tile = tileOf(node) || {};
+            const title = titleOf(node) || tile.title;
             if (title) {
                 seen.add(id);
                 items.push({
                     videoId: id,
                     title,
-                    channel: textOf(node.ownerText) || textOf(node.longBylineText) || textOf(node.shortBylineText),
-                    duration: textOf(node.lengthText) || textOf(node.thumbnailOverlays && node.thumbnailOverlays[0] && node.thumbnailOverlays[0].thumbnailOverlayTimeStatusRenderer && node.thumbnailOverlays[0].thumbnailOverlayTimeStatusRenderer.text),
-                    thumbnail: thumbnailOf(node),
+                    channel: textOf(node.ownerText) || textOf(node.longBylineText) || textOf(node.shortBylineText) || tile.channel || '',
+                    views: textOf(node.viewCountText) || tile.views || '',
+                    age: textOf(node.publishedTimeText) || tile.age || '',
+                    duration: textOf(node.lengthText) || tile.duration || '',
+                    thumbnail: thumbnailOf(node) || tile.thumbnail || '',
                 });
             }
         }

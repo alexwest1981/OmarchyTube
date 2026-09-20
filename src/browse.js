@@ -23,12 +23,20 @@ function makeCard(item) {
 
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
-    if (item.thumbnail) {
+    // Ett videokort har ALLTID en miniatyr: den byggs ur video-id:t (hq720,
+    // 1280x720 — mätt 2026-09-19) även när svaret inte bär någon bild-URL. Det
+    // var därför korten var svarta: porten krävde en bild-URL som TV-flödet inte
+    // lämnar (mätt 2026-09-20).
+    const bild = item.kind === 'channel' ? item.thumbnail : (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hq720.jpg` : '');
+    if (bild) {
         const img = document.createElement('img');
-        // 1280x720 i stället för träfflistans 720x404 (mätt 2026-09-19).
-        // Kanaler har en avatar i stället för en miniatyr.
-        img.src = item.kind === 'channel' ? item.thumbnail : `https://i.ytimg.com/vi/${item.videoId}/hq720.jpg`;
-        img.addEventListener('error', () => { img.src = item.thumbnail; });
+        img.src = bild;
+        // Äldre videor saknar hq720 (mätt i en riktig rendering 2026-09-20: två
+        // kort blev grå platshållare). hqdefault finns alltid — sista steget.
+        img.addEventListener('error', () => {
+            if (item.thumbnail && img.src !== item.thumbnail) img.src = item.thumbnail;
+            else if (!/hqdefault/.test(img.src)) img.src = `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`;
+        });
         img.alt = '';
         img.loading = 'lazy';
         thumb.append(img);
@@ -44,9 +52,11 @@ function makeCard(item) {
     title.className = 'title';
     title.textContent = item.title;
 
+    // YouTubes egen underrad: kanal · visningar · ålder.
+    const under = [item.channel, item.views, item.age].filter(Boolean).join(' · ');
     const channel = document.createElement('span');
     channel.className = 'channel';
-    channel.textContent = item.channel || '';
+    channel.textContent = under;
 
     card.append(thumb, title, channel);
     card.addEventListener('click', () => play(state.items.indexOf(item)));

@@ -256,3 +256,88 @@ footer {
     border-radius: 12px;
 }
 #login .hint { color: var(--muted); font-size: 14px; }
+
+
+/* ── YouTubes yta ───────────────────────────────────────────────────────────
+   Alex: "jag vill ha mer YouTube över UI/UX". Mätt mot YouTubes egen yta:
+   röda accenter (inte gröna), miniatyr 16:9 med rundade hörn, längd nere till
+   höger, titel i två rader, och en underrad med kanal · visningar · ålder.
+   Rutnätet är tätare än YouTubes eget (hans önskemål: flera rader synliga). */
+:root {
+    --yt-red: #ff0033;
+    --text: #f1f1f1;
+    --muted: #aaaaaa;
+}
+
+header { padding: 14px var(--pad) 10px; gap: 16px; }
+header h1 { font-size: 20px; letter-spacing: -0.3px; }
+header h1::before {
+    content: "";
+    display: inline-block;
+    width: 26px;
+    height: 18px;
+    margin-right: 8px;
+    vertical-align: -2px;
+    border-radius: 5px;
+    background: var(--yt-red);
+    box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+#tabs { margin-left: 8px; gap: 4px; }
+#tabs button {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 10px 14px;
+    color: var(--muted);
+    font-size: 15px;
+}
+#tabs button:hover { background: transparent; color: var(--text); }
+#tabs button.active { border-bottom-color: var(--yt-red); color: var(--text); font-weight: 600; }
+
+#search {
+    background: #121212;
+    border: 1px solid #303030;
+    border-radius: 999px;
+    padding: 9px 16px;
+    min-width: 260px;
+}
+#search:focus { border-color: #3ea6ff; outline: none; }
+
+.card {
+    background: transparent;
+    border: 0;
+    padding: 6px;
+    border-radius: 14px;
+    gap: 10px;
+}
+.card:hover { background: transparent; }
+.card:hover .thumb { filter: brightness(1.08); }
+.card.selected { border: 0; background: transparent; box-shadow: 0 0 0 2px var(--text); }
+
+.thumb { border-radius: 12px; }
+.duration {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.82);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+.title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.28;
+    color: var(--text);
+}
+.channel { font-size: 13px; color: var(--muted); }
+#grid { gap: 18px 14px; padding-bottom: 18px; }

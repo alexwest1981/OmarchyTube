@@ -105,8 +105,9 @@ test('spelaren har formatväljaren som är mätt fungerande', () => {
 
 test('rutnätet hämtar 1280x720, inte träfflistans 720x404', () => {
     const src = read('browse.js');
-    assert.match(src, /hq720/);
-    assert.ok(!/img\.src = item\.thumbnail;\n/.test(src), 'träfflistans bild får bara vara reserv');
+    assert.match(src, /i\.ytimg\.com\/vi\/\$\{item\.videoId\}\/hq720\.jpg/, 'miniatyren skall byggas ur video-id:t');
+    assert.match(src, /hqdefault\.jpg/, 'sista reserven skall vara hqdefault — äldre videor saknar hq720');
+    assert.match(src, /addEventListener\('error'/, 'en trasig bild skall bytas, inte lämna en grå platshållare');
 });
 
 test('video-id valideras innan det når mpv', () => {

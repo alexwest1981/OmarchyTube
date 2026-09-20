@@ -114,3 +114,16 @@ test('sökningen är kontofri — TV-sessionen gäller bara flödena', async () 
     await innertube.recommended();
     assert.ok(requests[efter].options.headers.Authorization, 'flödet skall bära nyckeln');
 });
+
+test('en avvisad nyckel kastas, så att appen fångar en ny (annars fungerar det bara en timme)', async () => {
+    innertube.storeSession({ token: 'utgången-nyckel-1234567890', visitorId: 'v', clientVersion: '7.0', context: { client: { clientName: 'TVHTML5' } } });
+    assert.ok(innertube.storedSession(), 'sessionen skulle finnas');
+    const äktaFetch = require('electron').net.fetch;
+    require('electron').net.fetch = async () => ({ ok: false, status: 401, json: async () => ({}) });
+    try {
+        await assert.rejects(() => innertube.recommended(), '401 skall synas som ett fel');
+    } finally {
+        require('electron').net.fetch = äktaFetch;
+    }
+    assert.strictEqual(innertube.storedSession(), null, 'den utgångna nyckeln ligger kvar — då fastnar appen i tomt flöde');
+});

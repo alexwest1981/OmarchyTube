@@ -103,6 +103,15 @@ async function post(endpoint, body, token, context) {
         session: partition(),
         body: JSON.stringify({ context: context || (s && s.context) || CONTEXT, ...body }),
     });
+    // Nyckeln lever ungefär en timme (TV-appen förnyar den själv hela tiden). Svarar
+    // YouTube 401 är den slut: släng den sparade sessionen, så att appen visar
+    // inloggningsrutan igen, öppnar dörren och fångar en ny nyckel av sig själv.
+    if (response.status === 401 || response.status === 403) {
+        const fil = sessionFile();
+        try { if (fs.existsSync(fil)) fs.unlinkSync(fil); } catch { /* redan borta */ }
+        console.log(`[OmarchyTube] sessionen avvisades (${response.status}) — den hämtas igen`);
+        throw new Error(`${endpoint} svarade ${response.status} — sessionen förnyas`);
+    }
     if (!response.ok) throw new Error(`${endpoint} svarade ${response.status}`);
     return response.json();
 }

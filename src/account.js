@@ -207,7 +207,11 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, onSession, intervalM
         if (via) {
             clearInterval(timer);
             console.log(`[OmarchyTube] inloggad — ${via}`);
-            await partition().flushStorageData().catch((err) => console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message));
+            // flushStorageData är SYNKRON — den returnerar ingenting, så .catch på
+            // den kastar "Cannot read properties of undefined (reading 'catch')"
+            // (mätt i Alex körning 2026-09-20). Skyddet räddade väntan; nu är
+            // roten borta.
+            try { partition().flushStorageData(); } catch (err) { console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message); }
             door.close();
             if (onSignedIn) onSignedIn({ ...state, via });
         }

@@ -32,6 +32,11 @@ test('appens session har ett eget hem, och partitionen är den inloggade', () =>
     assert.match(read('main.js'), /requestSingleInstanceLock/, 'två instanser delar partition och skriver över varandra');
 });
 
+test('flushStorageData anropas utan .catch — den är synkron och kastar annars', () => {
+    const src = all();
+    assert.ok(!/flushStorageData\(\)\s*\n?\s*\.catch/.test(src), 'flushStorageData().catch(...) kastar: den returnerar ingenting');
+});
+
 test('sessionen skrivs till disk, annars börjar nästa start om', () => {
     assert.match(read('account.js'), /flushStorageData/, 'dörren skall skriva sessionen till disk när kontot syns');
     assert.match(read('main.js'), /flushStorageData/, 'appen skall skriva sessionen till disk innan den avslutas');

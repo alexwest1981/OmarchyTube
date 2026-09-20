@@ -152,7 +152,5 @@ app.on('before-quit', (event) => {
     if (flushed) return;
     event.preventDefault();
     flushed = true;
-    session.fromPartition(PARTITION).flushStorageData()
-        .catch((err) => console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message))
-        .finally(() => { console.log('[OmarchyTube] sessionen skriven till disk'); app.quit(); });
+    try { session.fromPartition(PARTITION).flushStorageData(); } catch (err) { console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message); } app.quit(); });
 });

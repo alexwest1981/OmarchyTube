@@ -232,8 +232,7 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, onSession, intervalM
         const state = await accountState(doorSession).catch(() => ({ signedIn: false }));
         if (state.signedIn) {
             console.log(`[OmarchyTube] kontot hittades när fönstret stängdes (${state.markers.join(', ')})`);
-            await partition().flushStorageData()
-                .catch((err) => console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message));
+            try { partition().flushStorageData(); } catch (err) { console.error('[OmarchyTube] kunde inte skriva sessionen:', err.message); }
             if (onSignedIn) onSignedIn(state);
         }
         if (onClosed) onClosed();

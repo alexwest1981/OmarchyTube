@@ -8,6 +8,23 @@
 // sits in test/fixtures/innertube-search.json.
 const MAX_ITEMS = 120;
 
+// TV-appens flöde (browseId "default"/"FEsubscriptions") lägger videon ett steg
+// ned: id:t sitter i onSelectCommand.watchEndpoint.videoId och titeln i
+// metadata.tileMetadataRenderer.title. Mätt 2026-09-20 på ett riktigt svar —
+// med den gamla formkontrollen blev 135 videor till 0.
+function videoIdOf(node) {
+    if (typeof node.videoId === 'string') return node.videoId;
+    const ned = node.onSelectCommand || node.navigationEndpoint || node.onTapCommand || {};
+    const vakt = ned.watchEndpoint || ned.reelWatchEndpoint || ned;
+    return typeof vakt.videoId === 'string' ? vakt.videoId : null;
+}
+
+function titleOf(node) {
+    return textOf(node.title)
+        || textOf(node.headline)
+        || textOf(node.metadata && node.metadata.tileMetadataRenderer && node.metadata.tileMetadataRenderer.title);
+}
+
 function textOf(node) {
     if (typeof node === 'string') return node;
     if (!node || typeof node !== 'object') return '';
@@ -38,9 +55,9 @@ function extractItems(payload) {
             for (const child of node) walk(child);
             return;
         }
-        const id = node.videoId;
+        const id = videoIdOf(node);
         if (typeof id === 'string' && /^[\w-]{11}$/.test(id) && !seen.has(id)) {
-            const title = textOf(node.title) || textOf(node.headline);
+            const title = titleOf(node);
             if (title) {
                 seen.add(id);
                 items.push({

@@ -11,6 +11,12 @@ const path = require('node:path');
 
 // Loggen hamnar också i en fil: då kan felet läsas i efterhand i stället för att
 // någon skall klistra in en skärmdump (appens utdata försvinner med terminalen).
+// Ett eget hem för appens session. Mätt 2026-09-20: appen satte aldrig userData,
+// så partitionen hamnade i Electrons standardkatalog — och tre olika TV-tillstånd
+// låg på disk (~/.config/Electron, ~/.config/OmarchyTube, ~/.config/omarchy-tube).
+// Inloggningen tappades varje gång appens namn eller startväg ändrades.
+app.setPath('userData', path.join(app.getPath('appData'), 'OmarchyTube'));
+
 const LOG_FILE = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state'), 'omarchy-tube', 'log.txt');
 try {
     fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
@@ -24,7 +30,7 @@ for (const level of ['log', 'error']) {
         try { fs.appendFileSync(LOG_FILE, args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n'); } catch { /* tyst */ }
     };
 }
-const { search, recommended, recommendedWithAnyClient, candidatesFrom, subscriptionsFeed, storeToken } = require('./innertube');
+const { search, recommended, recommendedWithAnyClient, candidatesFrom, subscriptionsFeed, storeToken, storeSession, storedSession } = require('./innertube');
 const { play, stop } = require('./player');
 const account = require('./account');
 
@@ -111,6 +117,13 @@ ipcMain.handle('openLogin', () => {
                 }
             }
         },
+        // Nyckeln dörren fångade ur sitt eget anrop: den skrivs till disk (0600)
+        // och bevisas med ett riktigt anrop innan appen kallar sig inloggad.
+        onSession: async (data) => {
+            storeSession(data);
+            const antal = await recommended().then((i) => i.length).catch(() => 0);
+            console.log(`[OmarchyTube] sessionen sparad (${String(data.token || '').length} tecken) — rekommendationerna svarar ${antal} videor`);
+        },
         onSignedIn: (state) => console.log(`[OmarchyTube] dörren stängd, kontot i partitionen (${state.via})`),
     });
     return { opened: true };
@@ -120,6 +133,16 @@ ipcMain.handle('play', (_event, videoId) => {
     if (!/^[\w-]{11}$/.test(String(videoId || ''))) throw new Error(`ogiltigt video-id: ${videoId}`);
     return { pid: play(videoId) };
 });
+
+// En instans: två samtidiga appfönster delar partition och skriver över varandra.
+if (!app.requestSingleInstanceLock()) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        const [win] = BrowserWindow.getAllWindows();
+        if (win) { win.show(); win.focus(); }
+    });
+}
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { stop(); app.quit(); });

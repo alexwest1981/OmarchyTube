@@ -12,7 +12,7 @@
 // session TV-appen just skapat, och gjorde att varje inloggning började om.
 const { BrowserWindow, session } = require('electron');
 
-const PARTITION = 'persist:omarchy-tube-own';
+const PARTITION = 'persist:omarchy-tube';
 const TV_UA = 'Mozilla/5.0 (Web0S; SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 const DOOR_URL = 'https://www.youtube.com/tv';
 
@@ -55,6 +55,19 @@ const LES_KODEN = `(function () {
 // TV-appen visar sin inloggning bakom en "Sign in"-knapp. Att trycka på sidans
 // EGEN knapp är att använda flödet, inte att ändra sidan — och det är precis vad
 // en människa hade gjort i det synliga fönstret.
+const TRYCK_VIDARE = `(function () {
+    var kandidater = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'));
+    var mönster = /(get started|sign in|logga in|continue|fortsätt|next|nästa|börja|start)/i;
+    var knapp = kandidater.filter(function (el) {
+        var t = (el.textContent || '').trim();
+        return t && t.length < 40 && mönster.test(t);
+    })[0];
+    if (!knapp) return null;
+    var namn = (knapp.textContent || '').trim().slice(0, 24);
+    knapp.click();
+    return namn;
+})()`;
+
 const TRYCK_KONTO = `(function () {
     var kandidater = Array.prototype.slice.call(document.querySelectorAll('button, a, [role=button]'));
     var konto = kandidater.filter(function (el) { return /@/.test((el.textContent || '')); })[0];
@@ -83,7 +96,7 @@ async function accountState(from) {
 // funktionell — den kan inte ha rätt om kaknamn och fel om verkligheten, och den
 // är samma anrop rutnätet behöver ändå. Mätt 2026-09-19: ingen partition på
 // disk hade någonsin kontomarkörer, så signal (1) ensam var en gissning.
-function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } = {}) {
+function openDoor({ onSignedIn, onClosed, probe, onStorage, onSession, intervalMs = 2000 } = {}) {
     partition().setUserAgent(TV_UA);   // mätt: med skrivbordsagenten svarar YouTube med en återvändsgränd
     const door = new BrowserWindow({
         width: 1280,
@@ -103,6 +116,41 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
     });
     // Identiteten sätts på själva hämtningen: med skrivbordsagenten svarar
     // YouTube med sin grå omdirigering till youtube.com (mätt 2026-09-19).
+    // Nyckeln fångas där den skickas: dörrens EGNA anrop till YouTube. Det är
+    // samma mekanism TV-appen själv använder — ingen gissning, ingen egen
+    // OAuth-klient, inget konto att skapa. Bara längden loggas, aldrig nyckeln.
+    if (!fångat && typeof onSession === 'function') {
+        door.webContents.session.webRequest.onBeforeSendHeaders(
+            { urls: ['*://*.youtube.com/youtubei/v1/*'] },
+            (detaljer, klar) => {
+                const h = detaljer.requestHeaders || {};
+                const au = Object.keys(h).find((k) => /^authorization$/i.test(k));
+                const kropp = detaljer.uploadData && detaljer.uploadData[0] ? String(detaljer.uploadData[0].bytes || '') : '';
+                if (au && kropp && !fångat) {
+                    fångat = true;
+                    let context = null;
+                    try { context = JSON.parse(kropp).context || null; } catch { context = null; }
+                    console.log(`[OmarchyTube] TV-sessionens nyckel fångad ur dörrens eget anrop (${String(h[au]).length} tecken)`);
+                    onSession({
+                        // Värdet är hela huvudet inklusive "Bearer " — prefixet sätts
+                        // på ett ställe (innertube.js). Att behålla det här gav
+                        // "Bearer Bearer eyJ…" och 401 (mätt 2026-09-20: 279 mot 272 tecken).
+                        token: String(h[au]).replace(/^Bearer\s+/i, ''),
+                        // TV-klientens EGEN api-nyckel ligger i anropets URL. Med
+                        // appens web-nyckel svarar YouTube 401 på en TV-nyckel
+                        // (mätt 2026-09-20: identisk token gav 200 utan ?key= men
+                        // 401 med web-nyckeln).
+                        url: String(detaljer.url || ''),
+                        visitorId: String(h['X-Goog-Visitor-Id'] || h['x-goog-visitor-id'] || ''),
+                        clientVersion: String(h['X-Youtube-Client-Version'] || h['x-youtube-client-version'] || ''),
+                        pageLabel: String(h['X-YouTube-Page-Label'] || ''),
+                        pageCl: String(h['X-YouTube-Page-CL'] || ''),
+                        context,
+                    });
+                }
+                klar({ requestHeaders: h });
+            });
+    }
     door.loadURL(DOOR_URL, { userAgent: TV_UA });
     // Dörren skall läsa sin EGEN session, och den skall vara rutnätets. Electron
     // returnerar samma sessionsobjekt för samma partitionsnamn, så en jämförelse
@@ -193,6 +241,7 @@ function openDoor({ onSignedIn, onClosed, probe, onStorage, intervalMs = 2000 } 
 // TV-appen går genom flera skärmar (mätt: "Get started" först, inloggningen
 // efter). Ett tryck per skärm, aldrig samma knapp två gånger, och bara på
 // sidans EGNA knappar — det är vad en människa hade gjort.
+let fångat = false;
 let tryckta = [];
 let senasteSkarm = null;
 let senasteSkarmForra = null;
@@ -208,33 +257,33 @@ async function loginInfo() {
     let läst = {};
     if (raw) { try { läst = JSON.parse(raw); } catch { läst = {}; } }
     const code = codeFrom(läst.code) || läst.code || null;
-    // TV-appen styrs med fjärrkontroll: Enter väljer. Knapptexten är en gissning,
-    // Enter fungerar på varje skärm — och skärmen loggas så vi ser exakt vad den
-    // visar i stället för att gissa.
     const skarm = `${läst.titel || ''}|${läst.langd || 0}|${(läst.knappar || []).join(',')}`;
     if (skarm !== senasteSkarm) {
         senasteSkarm = skarm;
         console.log(`[OmarchyTube] skärmen: "${läst.titel || '?'}" ${läst.langd || 0} tecken | ${(läst.knappar || []).join(' | ') || '(inga knappar)'} | kod: ${code || 'nej'}`);
     }
-    let lage = (läst.knappar || []).some((k) => k.includes('@')) ? 'konto' : 'kod';
+    // TV-appen styrs som en TV. Tre vägar, i den ordning de bevisats fungera:
+    // kontoraden (AlexWest/@alexwest_yt finns i hans partition), sidans egen
+    // märkta knapp ("Get started" i en färsk burk), annars Enter — fjärrkontrollens
+    // val. Ett försök per ny skärm, högst fyra, och varje steg hamnar i loggen.
     if (!code && tryckta.length < 4 && skarm !== senasteSkarmForra) {
         senasteSkarmForra = skarm;
-        // Mätt i Alex partition: TV-appen står på YouTubes kontoväljare (AlexWest,
-        // @alexwest_yt, Premium) och Enter tar den vidare. Kontoraden klickas när
-        // den finns — då är valet hans eget konto och inget annat.
         const valt = await current.webContents.executeJavaScript(TRYCK_KONTO).catch(() => null);
+        const knapp = valt ? null : await current.webContents.executeJavaScript(TRYCK_VIDARE).catch(() => null);
         if (valt) {
             tryckta.push(`konto: ${valt}`);
             console.log(`[OmarchyTube] valde kontot "${valt}" (steg ${tryckta.length})`);
+        } else if (knapp && !tryckta.includes(knapp)) {
+            tryckta.push(knapp);
+            console.log(`[OmarchyTube] klickade "${knapp}" (steg ${tryckta.length})`);
         } else {
-            await current.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-            await current.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
-            await current.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+            for (const typ of ['keyDown', 'char', 'keyUp']) {
+                await current.webContents.sendInputEvent({ type: typ, keyCode: typ === 'char' ? '\r' : 'Return' });
+            }
             tryckta.push(`Enter på "${läst.titel || '?'}"`);
             console.log(`[OmarchyTube] skickade Enter till inloggningsskärmen (steg ${tryckta.length})`);
         }
     }
-    const status = lage === 'konto' ? 'Väljer ditt konto i TV-appen …' : 'Inloggningen väntar på dig i den här rutan …';
     if (!code && Date.now() - senasteBild > 3000) {
         senasteBild = Date.now();
         try {
@@ -249,6 +298,9 @@ async function loginInfo() {
         }
     }
     if (code) console.log(`[OmarchyTube] koden läst ur sidan: ${code}`);
+    const status = (läst.knappar || []).some((k) => k.includes('@'))
+        ? 'Väljer ditt konto i TV-appen …'
+        : 'Inloggningen väntar på dig i den här rutan …';
     return { open: true, code, qr: qrBild, status };
 }
 

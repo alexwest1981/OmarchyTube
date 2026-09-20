@@ -21,6 +21,17 @@ test('appen raderar aldrig sessionsdata — det var inloggningsloopen', () => {
     }
 });
 
+// Mätt 2026-09-20: appen satte aldrig userData, så partitionen hamnade i
+// Electrons standardkatalog — tre olika TV-tillstånd låg på disk samtidigt
+// (~/.config/Electron, ~/.config/OmarchyTube, ~/.config/omarchy-tube) och
+// inloggningen tappades varje gång appens namn eller startväg ändrades.
+// Det är den buggen det här provet fångar.
+test('appens session har ett eget hem, och partitionen är den inloggade', () => {
+    assert.match(read('main.js'), /app\.setPath\('userData'/, 'main.js måste sätta userData');
+    assert.match(read('account.js'), /const PARTITION = 'persist:omarchy-tube';/, 'partitionen skall vara den inloggade');
+    assert.match(read('main.js'), /requestSingleInstanceLock/, 'två instanser delar partition och skriver över varandra');
+});
+
 test('sessionen skrivs till disk, annars börjar nästa start om', () => {
     assert.match(read('account.js'), /flushStorageData/, 'dörren skall skriva sessionen till disk när kontot syns');
     assert.match(read('main.js'), /flushStorageData/, 'appen skall skriva sessionen till disk innan den avslutas');

@@ -38,28 +38,70 @@ const thumbUrl = (videoId) => `https://i.ytimg.com/vi/${videoId}/hq720.jpg`;
 // bara inloggningsdörren behöver TV-identiteten.
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
 const sessionFile = () => path.join(process.env.XDG_CONFIG_HOME || path.join(require('node:os').homedir(), '.config'), 'omarchy-tube', 'session.json');
-function storedToken() {
-    try { return JSON.parse(fs.readFileSync(sessionFile(), 'utf8')).token || null; } catch { return null; }
+function storedSession() {
+    try {
+        const data = JSON.parse(fs.readFileSync(sessionFile(), 'utf8'));
+        return data && data.token ? data : null;
+    } catch { return null; }
 }
-function storeToken(token) {
+function storedToken() {
+    const s = storedSession();
+    return s ? s.token : null;
+}
+// Mätt 2026-09-20: TV-appen autentiserar inte med kakor utan med en Bearer på
+// 272 tecken, och den skickar en rad TV-huvuden vid sidan av. Nyckeln fångas ur
+// appens EGNA dörrfönster (dess eget webRequest), aldrig ur en gissning — och
+// den skrivs till disk, aldrig till loggen.
+function storeSession(data) {
     const file = sessionFile();
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(file, JSON.stringify({ token }), { mode: 0o600 });
+    fs.writeFileSync(file, JSON.stringify(data), { mode: 0o600 });
+}
+function storeToken(token) {
+    storeSession({ token });
 }
 
-const headers = (token) => {
+const headers = (token, session) => {
+    // session === null betyder: det här anropet skall vara kontofritt (sökningen).
+    const s = session === undefined ? storedSession() : session;
     const base = { 'Content-Type': 'application/json', 'User-Agent': UA };
-    const bearer = token || storedToken();
-    return bearer ? { ...base, Authorization: `Bearer ${bearer}` } : base;
+    const bearer = token || (s && s.token);
+    if (!bearer) return base;
+    if (!s) return { ...base, Authorization: `Bearer ${bearer}` };
+    // TV-identitetens huvuden, ordagrant som TV-appen skickar dem (mätta i dess
+    // eget anrop 2026-09-20). Utan dem svarar YouTube tomt trots giltig nyckel.
+    return {
+        ...base,
+        Authorization: `Bearer ${bearer}`,
+        Origin: 'https://www.youtube.com',
+        Referer: 'https://www.youtube.com/tv',
+        'X-Youtube-Client-Name': '7',
+        'X-Youtube-Client-Version': s.clientVersion || '7.20260916.14.00',
+        'X-Goog-Visitor-Id': s.visitorId || '',
+        'X-YouTube-Page-Label': s.pageLabel || 'youtube.leanback.v4',
+        'X-YouTube-Page-CL': String(s.pageCl || ''),
+    };
 };
 
 async function post(endpoint, body, token, context) {
-    const url = `https://www.youtube.com/youtubei/v1/${endpoint}?key=${API_KEY}&prettyPrint=false`;
+    // TV-sessionen gäller flödena (browse), inte sökningen: med TV-nyckeln svarar
+    // /search tomt (mätt 2026-09-20: 0 träffar med sessionen, 19–45 utan). Sök
+    // är kontofri väg och skall förbli det.
+    const s = endpoint === 'browse' ? storedSession() : null;
+    // TV-sessionen kom med TV-klientens egen nyckel i URL:en. Behåll frågedelen
+    // (key/prettyPrint) från den — annars svarar YouTube 401.
+    let url = `https://www.youtube.com/youtubei/v1/${endpoint}?key=${API_KEY}&prettyPrint=false`;
+    if (s && s.url) {
+        try {
+            const fångad = new URL(s.url);
+            url = `https://www.youtube.com/youtubei/v1/${endpoint}?${fångad.searchParams.toString()}`;
+        } catch { /* behåll standard-URL:en */ }
+    }
     const response = await net.fetch(url, {
         method: 'POST',
-        headers: headers(token),
+        headers: headers(token, s),
         session: partition(),
-        body: JSON.stringify({ context: context || CONTEXT, ...body }),
+        body: JSON.stringify({ context: context || (s && s.context) || CONTEXT, ...body }),
     });
     if (!response.ok) throw new Error(`${endpoint} svarade ${response.status}`);
     return response.json();
@@ -83,7 +125,7 @@ const search = (query) => run(`sök "${query}"`, 'search', { query });
 
 // YouTubes egna flöden. De kräver ett konto — utan konto svarar YouTube tomt
 // eller 400, och då säger appen det i stället för att visa en tom ruta.
-const recommended = () => run('rekommenderat', 'browse', { browseId: 'FEwhat_to_watch' });
+const recommended = () => run('rekommenderat', 'browse', { browseId: storedToken() ? 'default' : 'FEwhat_to_watch' });
 
 // Din feed: de nyaste videorna från kanalerna du följer. Namnet är YouTubes
 // eget; provar kandidaterna i tur och ordning och loggar vilken som svarade.
@@ -132,4 +174,4 @@ async function recommendedWithAnyClient(token) {
     return { items: [], clientName: null };
 }
 
-module.exports = { search, recommended, recommendedWith, recommendedWithAnyClient, candidatesFrom, subscriptionsFeed, storeToken, storedToken, thumbUrl, API_KEY, CONTEXT };
+module.exports = { storedSession, storeSession, search, recommended, recommendedWith, recommendedWithAnyClient, candidatesFrom, subscriptionsFeed, storeToken, storedToken, thumbUrl, API_KEY, CONTEXT };

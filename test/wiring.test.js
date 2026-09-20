@@ -47,7 +47,14 @@ test('huvudprocessen laddar och skapar ett fönster (Electron-attrapp)', () => {
         on() {}
     }
     const fake = {
-        app: { whenReady: () => ({ then: (fn) => { fn(); return { catch() {} }; } }), on() {}, quit() {} },
+        app: {
+            setPath() {},
+            getPath: () => '/tmp',
+            requestSingleInstanceLock: () => true,
+            whenReady: () => ({ then: (fn) => { fn(); return { catch() {} }; } }),
+            on() {},
+            quit() {},
+        },
         BrowserWindow: FakeWindow,
         ipcMain: { handle: (channel) => created.push(channel) },
         contextBridge: { exposeInMainWorld: (name, api) => { created.push({ name, api }); } },

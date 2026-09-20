@@ -18,6 +18,7 @@ const fakeElectron = {
 };
 const original = Module._load;
 Module._load = (request, ...rest) => (request === 'electron' ? fakeElectron : original.call(Module, request, ...rest));
+const { extractItems } = require('../src/innertube-extract');
 const innertube = require(path.join(__dirname, '..', 'src', 'innertube.js'));
 Module._load = original;
 
@@ -50,4 +51,66 @@ test('kandidaterna plockas ur ett JSON-värde, inte ur hela blobben', () => {
     assert.ok(!funna.includes(blob), 'hela blobben skall inte provas');
     assert.deepStrictEqual(innertube.candidatesFrom('kort'), [], 'för korta strängar hoppas över');
     assert.deepStrictEqual(innertube.candidatesFrom('en-lang- strang-1234567890'), ['en-lang- strang-1234567890']);
+});
+
+test('TV-sessionen skickas som TV-appen gör, och nyckeln hamnar aldrig i loggen', async () => {
+    const token = 'hemlig-tv-nyckel-1234567890';
+    innertube.storeSession({
+        token,
+        visitorId: 'besokare-123',
+        clientVersion: '7.20260916.14.00',
+        pageLabel: 'youtube.leanback.v4',
+        pageCl: '1234567',
+        context: { client: { clientName: 'TVHTML5', clientVersion: '7.20260916.14.00', deviceModel: 'SmartTV', gl: 'SE' } },
+    });
+    const loggat = [];
+    const äktaLogg = console.log;
+    const äktaFel = console.error;
+    console.log = (...a) => loggat.push(a.join(' '));
+    console.error = (...a) => loggat.push(a.join(' '));
+    const före = requests.length;
+    try { await innertube.recommended(); } finally { console.log = äktaLogg; console.error = äktaFel; }
+
+    const skickat = requests[före];
+    assert.ok(skickat, 'inget anrop gjordes');
+    assert.strictEqual(skickat.options.headers.Authorization, `Bearer ${token}`, 'nyckeln skickades inte som Bearer');
+    assert.strictEqual(skickat.options.headers['X-Youtube-Client-Name'], '7', 'TV-klientens namn saknas');
+    assert.strictEqual(skickat.options.headers['X-Goog-Visitor-Id'], 'besokare-123', 'besökarens id saknas');
+    assert.match(skickat.options.headers['X-Youtube-Client-Version'], /^7\./, 'klientversionen följer inte med');
+    const kropp = JSON.parse(skickat.options.body);
+    assert.strictEqual(kropp.browseId, 'default', 'TV-klientens eget flöde skall användas');
+    assert.strictEqual(kropp.context.client.clientName, 'TVHTML5', 'fel klientkontext');
+    const allt = loggat.join('\n');
+    assert.ok(!allt.includes(token) && !allt.includes('hemlig'), `NYCKELN LÄCKTE TILL LOGGEN:\n${allt}`);
+    assert.ok(allt.includes('rekommenderat'), 'anropet skall ändå synas i loggen');
+});
+
+test('ett fångat huvud med "Bearer " blir inte "Bearer Bearer"', async () => {
+    const rent = 'eyJhbGciOi-rent-1234567890';
+    innertube.storeSession({ token: rent, visitorId: 'v', clientVersion: '7.0', context: { client: { clientName: 'TVHTML5' } } });
+    const före = requests.length;
+    await innertube.recommended();
+    const huvud = requests[före].options.headers.Authorization;
+    assert.strictEqual(huvud, `Bearer ${rent}`, `fel huvud: ${huvud.slice(0, 20)}…`);
+    assert.ok(!/Bearer\s+Bearer/i.test(huvud), 'prefixet sattes två gånger — det gav 401 hos YouTube');
+});
+
+test('TV-flödets poster hittas (id:t ett steg ned, titeln i metadata)', () => {
+    const fixtur = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'innertube-tv-feed.json'), 'utf8'));
+    const poster = extractItems(fixtur);
+    assert.strictEqual(poster.length, 1, `hittade ${poster.length} poster`);
+    assert.strictEqual(poster[0].videoId.length, 11, 'fel video-id');
+    assert.ok(poster[0].title.length > 5, 'titeln saknas');
+});
+
+test('sökningen är kontofri — TV-sessionen gäller bara flödena', async () => {
+    innertube.storeSession({ token: 'hemlig-1234567890', visitorId: 'v', clientVersion: '7.0', context: { client: { clientName: 'TVHTML5' } } });
+    const före = requests.length;
+    await innertube.search('linux');
+    const sök = requests[före];
+    assert.ok(!sök.options.headers.Authorization, 'sökningen skall inte bära kontots nyckel');
+    assert.strictEqual(JSON.parse(sök.options.body).context.client.clientName, 'WEB', 'sökningen skall presentera sig som webbläsare');
+    const efter = requests.length;
+    await innertube.recommended();
+    assert.ok(requests[efter].options.headers.Authorization, 'flödet skall bära nyckeln');
 });

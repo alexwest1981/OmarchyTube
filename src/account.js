@@ -300,7 +300,7 @@ async function loginInfo() {
     if (code) console.log(`[OmarchyTube] koden läst ur sidan: ${code}`);
     const status = (läst.knappar || []).some((k) => k.includes('@'))
         ? 'Väljer ditt konto i TV-appen …'
-        : 'Inloggningen väntar på dig i den här rutan …';
+        : 'Hämtar din TV-session — inget behöver göras …';
     return { open: true, code, qr: qrBild, status };
 }
 

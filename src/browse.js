@@ -217,10 +217,12 @@ async function feed(name) {
     }
 }
 
+// Panelen är information, inte en uppgift: appen hämtar sin session själv.
+// Att visa den (L, eller vid start utan konto) ber bara huvudet öppna dörren.
 function openLogin() {
     loginPanel.hidden = false;
-    if (!loginStatusText.textContent) loginStatusText.textContent = 'Hämtar en kod …';
-    document.getElementById('open-login').focus();
+    if (!loginStatusText.textContent) loginStatusText.textContent = 'Hämtar din TV-session — inget behöver göras';
+    loginStatusText.focus();
 }
 
 // Inloggningen sker i ett osynligt fönster; här ritas bara koden och QR:en, och
@@ -260,18 +262,10 @@ async function start() {
     }
     setTab('search');
     openLogin();
-    showNotice('Sök fungerar utan konto. För din feed och rekommendationerna: skriv koden från telefonen — allt sker i det här fönstret.');
+    showNotice('Sök fungerar utan konto. Din feed hämtas från TV-appens session av sig själv — inget behöver göras.');
     await window.omarchyBridge.openLogin();
     watchForLogin();
 }
-
-document.getElementById('open-login').addEventListener('click', async () => {
-    loginCode.hidden = true;
-    loginQr.hidden = true;
-    loginStatusText.textContent = 'Hämtar en kod …';
-    await window.omarchyBridge.openLogin();
-    watchForLogin();
-});
 
 tabs.addEventListener('click', (event) => {
     const button = event.target.closest('button');
